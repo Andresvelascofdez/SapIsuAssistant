@@ -10,14 +10,20 @@
   <link rel="stylesheet" href="/static/style.css">
   <script>
     tailwind.config = {
+      darkMode: 'class',
       theme: { extend: { colors: { sap: { 50:'#eff6ff', 100:'#dbeafe', 500:'#3b82f6', 600:'#2563eb', 700:'#1d4ed8' } } } }
     }
   </script>
+  <script>
+    if (localStorage.getItem('darkMode') === 'true') {
+      document.documentElement.classList.add('dark');
+    }
+  </script>
 </head>
-<body class="bg-gray-50 min-h-screen flex" x-data="globalState()" x-init="init()">
+<body class="bg-gray-50 dark:bg-gray-900 min-h-screen flex transition-colors" x-data="globalState()" x-init="init()">
 
   <!-- Sidebar -->
-  <aside class="w-56 bg-gray-900 text-gray-100 flex flex-col min-h-screen fixed">
+  <aside class="w-56 bg-gray-900 dark:bg-gray-950 text-gray-100 flex flex-col min-h-screen fixed">
     <div class="px-4 py-5 border-b border-gray-700">
       <h1 class="text-lg font-bold tracking-tight">SAP IS-U</h1>
       <p class="text-xs text-gray-400">Assistant + Kanban</p>
@@ -47,11 +53,11 @@
   <!-- Main content -->
   <div class="ml-56 flex-1 flex flex-col min-h-screen">
     <!-- Top bar -->
-    <header class="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-6 sticky top-0 z-10">
+    <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-3 flex items-center gap-6 sticky top-0 z-10 transition-colors">
       <div class="flex items-center gap-2">
-        <label class="text-sm font-medium text-gray-700">Client:</label>
+        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Client:</label>
         <select x-model="activeClient" @change="setClient()"
-                class="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sap-500 focus:border-sap-500">
+                class="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sap-500">
           <option value="">(none)</option>
           {% for c in clients %}
           <option value="{{ c }}" {% if c == active_client %}selected{% endif %}>{{ c }}</option>
@@ -59,17 +65,30 @@
         </select>
       </div>
       <div class="flex items-center gap-2">
-        <label class="text-sm font-medium text-gray-700">Standard KB:</label>
+        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Standard KB:</label>
         <button @click="toggleStdKb()"
-                :class="standardKb ? 'bg-sap-600' : 'bg-gray-300'"
+                :class="standardKb ? 'bg-sap-600' : 'bg-gray-300 dark:bg-gray-600'"
                 class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors">
           <span :class="standardKb ? 'translate-x-6' : 'translate-x-1'"
                 class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"></span>
         </button>
       </div>
+
       <div class="flex-1"></div>
+
+      <!-- Dark mode toggle -->
+      <button @click="toggleDarkMode()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
+        <template x-if="!darkMode">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/></svg>
+        </template>
+        <template x-if="darkMode">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/></svg>
+        </template>
+        <span x-text="darkMode ? 'Light' : 'Dark'" class="hidden sm:inline"></span>
+      </button>
+
       <div id="toast" x-show="toast" x-transition
-           :class="toastType === 'error' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'"
+           :class="toastType === 'error' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'"
            class="px-4 py-2 rounded-lg text-sm font-medium" x-text="toast"></div>
     </header>
 
@@ -84,9 +103,15 @@
       return {
         activeClient: '{{ active_client or "" }}',
         standardKb: {{ 'true' if standard_kb_enabled else 'false' }},
+        darkMode: localStorage.getItem('darkMode') === 'true',
         toast: '',
         toastType: 'success',
         init() {},
+        toggleDarkMode() {
+          this.darkMode = !this.darkMode;
+          localStorage.setItem('darkMode', this.darkMode);
+          document.documentElement.classList.toggle('dark', this.darkMode);
+        },
         async setClient() {
           await fetch('/api/session/client', {
             method: 'POST',

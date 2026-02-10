@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% set active_tab = "kanban" %}
 {% block content %}
-<div x-data="kanbanApp()" x-init="loadTickets()" class="h-[calc(100vh-8rem)]">
+<div x-data="kanbanApp()" x-init="loadData()" class="h-[calc(100vh-8rem)]">
 
   <!-- Top bar -->
   <div class="flex items-center gap-4 mb-6">
@@ -9,39 +9,60 @@
             class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
       + New Ticket
     </button>
-    <button @click="loadTickets()"
-            class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition">
+    <button @click="showNewColModal = true"
+            class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+      + Column
+    </button>
+    <button @click="loadData()"
+            class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition">
       Refresh
     </button>
-    <span class="text-sm text-gray-500" x-text="statusText"></span>
+    <span class="text-sm text-gray-500 dark:text-gray-400" x-text="statusText"></span>
   </div>
 
-  <!-- Board columns -->
-  <div class="grid grid-cols-4 gap-4 h-[calc(100%-4rem)]">
-    <template x-for="col in columns" :key="col">
-      <div class="flex flex-col bg-gray-100 rounded-xl">
-        <div class="px-4 py-3 border-b border-gray-200">
-          <h3 class="text-sm font-bold text-gray-700" x-text="col.replace('_', ' ')"></h3>
-          <span class="text-xs text-gray-400" x-text="ticketsByCol(col).length + ' tickets'"></span>
+  <!-- Board columns (draggable) -->
+  <div class="flex gap-4 h-[calc(100%-4rem)] overflow-x-auto pb-2" id="columns-container" x-init="initColumnSortable()">
+    <template x-for="col in columns" :key="col.id">
+      <div class="flex flex-col bg-gray-100 dark:bg-gray-800 rounded-xl min-w-[280px] w-[280px] flex-shrink-0" :data-col-id="col.id">
+        <!-- Column header -->
+        <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between cursor-grab group">
+          <div class="flex-1 min-w-0">
+            <template x-if="editingCol !== col.id">
+              <div>
+                <h3 class="text-sm font-bold text-gray-700 dark:text-gray-200 truncate" x-text="col.display_name"
+                    @dblclick="startEditCol(col)"></h3>
+                <span class="text-xs text-gray-400 dark:text-gray-500" x-text="ticketsByCol(col.name).length + ' tickets'"></span>
+              </div>
+            </template>
+            <template x-if="editingCol === col.id">
+              <input x-ref="colEditInput" x-model="editingColName"
+                     @keydown.enter="saveColName(col)" @keydown.escape="editingCol = null" @blur="saveColName(col)"
+                     class="w-full border dark:border-gray-600 rounded px-2 py-1 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+            </template>
+          </div>
+          <button @click.stop="deleteCol(col)" class="opacity-0 group-hover:opacity-100 ml-2 text-gray-400 hover:text-red-500 transition text-sm" title="Delete column">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
         </div>
+        <!-- Ticket cards -->
         <div class="flex-1 overflow-y-auto p-3 space-y-2 min-h-[100px]"
-             :id="'col-' + col"
-             x-init="initSortable($el, col)">
-          <template x-for="ticket in ticketsByCol(col)" :key="ticket.id">
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-3 cursor-grab active:cursor-grabbing"
+             :id="'col-' + col.name"
+             x-init="initSortable($el, col.name)">
+          <template x-for="ticket in ticketsByCol(col.name)" :key="ticket.id">
+            <div class="bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-3 cursor-grab active:cursor-grabbing"
                  :data-id="ticket.id"
                  @click="selectTicket(ticket)">
               <div class="flex items-center justify-between mb-1">
                 <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
                       :class="{
-                        'bg-red-100 text-red-700': ticket.priority === 'CRITICAL',
-                        'bg-orange-100 text-orange-700': ticket.priority === 'HIGH',
-                        'bg-blue-100 text-blue-700': ticket.priority === 'MEDIUM',
-                        'bg-gray-100 text-gray-600': ticket.priority === 'LOW',
+                        'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300': ticket.priority === 'CRITICAL',
+                        'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300': ticket.priority === 'HIGH',
+                        'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300': ticket.priority === 'MEDIUM',
+                        'bg-gray-100 text-gray-600 dark:bg-gray-600 dark:text-gray-300': ticket.priority === 'LOW',
                       }" x-text="ticket.priority"></span>
               </div>
-              <div class="text-sm font-medium text-gray-800" x-text="ticket.title"></div>
-              <div x-show="ticket.notes" class="text-xs text-gray-500 mt-1 truncate" x-text="ticket.notes"></div>
+              <div class="text-sm font-medium text-gray-800 dark:text-gray-100" x-text="ticket.title"></div>
+              <div x-show="ticket.notes" class="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate" x-text="ticket.notes"></div>
             </div>
           </template>
         </div>
@@ -51,37 +72,51 @@
 
   <!-- New ticket modal -->
   <div x-show="showNewModal" x-transition class="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-    <div class="bg-white rounded-xl shadow-xl w-96 p-6" @click.outside="showNewModal = false">
-      <h3 class="text-lg font-semibold mb-4">New Ticket</h3>
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-96 p-6" @click.outside="showNewModal = false">
+      <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">New Ticket</h3>
       <div class="space-y-3">
-        <input x-model="newTicket.title" placeholder="Title" class="w-full border rounded-lg px-3 py-2 text-sm">
-        <select x-model="newTicket.priority" class="w-full border rounded-lg px-3 py-2 text-sm">
+        <input x-model="newTicket.title" placeholder="Title" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        <select x-model="newTicket.priority" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
           <option value="LOW">Low</option><option value="MEDIUM" selected>Medium</option>
           <option value="HIGH">High</option><option value="CRITICAL">Critical</option>
         </select>
-        <textarea x-model="newTicket.notes" placeholder="Notes (optional)" rows="3" class="w-full border rounded-lg px-3 py-2 text-sm"></textarea>
+        <textarea x-model="newTicket.notes" placeholder="Notes (optional)" rows="3" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
       </div>
       <div class="flex justify-end gap-3 mt-4">
-        <button @click="showNewModal = false" class="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
+        <button @click="showNewModal = false" class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Cancel</button>
         <button @click="createTicket()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- New column modal -->
+  <div x-show="showNewColModal" x-transition class="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-96 p-6" @click.outside="showNewColModal = false">
+      <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">New Column</h3>
+      <div class="space-y-3">
+        <input x-model="newColName" placeholder="Column name (e.g. Testing)" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+      </div>
+      <div class="flex justify-end gap-3 mt-4">
+        <button @click="showNewColModal = false" class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Cancel</button>
+        <button @click="createCol()" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Create</button>
       </div>
     </div>
   </div>
 
   <!-- Detail modal -->
   <div x-show="selectedTicket" x-transition class="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-    <div class="bg-white rounded-xl shadow-xl w-[480px] p-6" @click.outside="selectedTicket = null">
-      <h3 class="text-lg font-semibold mb-4">Ticket Detail</h3>
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-[480px] p-6" @click.outside="selectedTicket = null">
+      <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Ticket Detail</h3>
       <template x-if="selectedTicket">
         <div class="space-y-3">
-          <input x-model="selectedTicket.title" class="w-full border rounded-lg px-3 py-2 text-sm">
-          <select x-model="selectedTicket.priority" class="w-full border rounded-lg px-3 py-2 text-sm">
+          <input x-model="selectedTicket.title" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+          <select x-model="selectedTicket.priority" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
             <option value="LOW">Low</option><option value="MEDIUM">Medium</option>
             <option value="HIGH">High</option><option value="CRITICAL">Critical</option>
           </select>
-          <textarea x-model="selectedTicket.notes" rows="3" class="w-full border rounded-lg px-3 py-2 text-sm"></textarea>
+          <textarea x-model="selectedTicket.notes" rows="3" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
           <div class="flex justify-end gap-3 mt-4">
-            <button @click="selectedTicket = null" class="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Close</button>
+            <button @click="selectedTicket = null" class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Close</button>
             <button @click="saveTicket()" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Save</button>
           </div>
         </div>
@@ -93,20 +128,28 @@
 <script>
 function kanbanApp() {
   return {
-    columns: ['OPEN', 'IN_PROGRESS', 'WAITING', 'DONE'],
+    columns: [],
     tickets: [],
     showNewModal: false,
+    showNewColModal: false,
     selectedTicket: null,
     statusText: '',
     newTicket: {title: '', priority: 'MEDIUM', notes: ''},
+    newColName: '',
+    editingCol: null,
+    editingColName: '',
 
-    ticketsByCol(col) {
-      return this.tickets.filter(t => t.status === col);
+    ticketsByCol(colName) {
+      return this.tickets.filter(t => t.status === colName);
     },
 
-    async loadTickets() {
-      const resp = await fetch('/api/kanban/tickets');
-      this.tickets = await resp.json();
+    async loadData() {
+      const [colResp, ticketResp] = await Promise.all([
+        fetch('/api/kanban/columns'),
+        fetch('/api/kanban/tickets'),
+      ]);
+      this.columns = await colResp.json();
+      this.tickets = await ticketResp.json();
       this.statusText = this.tickets.length + ' tickets';
     },
 
@@ -119,7 +162,7 @@ function kanbanApp() {
       });
       this.newTicket = {title: '', priority: 'MEDIUM', notes: ''};
       this.showNewModal = false;
-      await this.loadTickets();
+      await this.loadData();
     },
 
     selectTicket(ticket) {
@@ -134,10 +177,84 @@ function kanbanApp() {
         body: JSON.stringify(this.selectedTicket),
       });
       this.selectedTicket = null;
-      await this.loadTickets();
+      await this.loadData();
     },
 
-    initSortable(el, col) {
+    // Column management
+    async createCol() {
+      const name = this.newColName.trim();
+      if (!name) return;
+      const resp = await fetch('/api/kanban/columns', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: name.toUpperCase().replace(/\s+/g, '_'), display_name: name}),
+      });
+      if (resp.ok) {
+        this.newColName = '';
+        this.showNewColModal = false;
+        await this.loadData();
+      } else {
+        const data = await resp.json();
+        alert(data.error || 'Failed to create column');
+      }
+    },
+
+    startEditCol(col) {
+      this.editingCol = col.id;
+      this.editingColName = col.display_name;
+      this.$nextTick(() => { if (this.$refs.colEditInput) this.$refs.colEditInput.focus(); });
+    },
+
+    async saveColName(col) {
+      if (this.editingCol !== col.id) return;
+      const newName = this.editingColName.trim();
+      this.editingCol = null;
+      if (!newName || newName === col.display_name) return;
+      await fetch('/api/kanban/columns/' + col.id, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({display_name: newName}),
+      });
+      await this.loadData();
+    },
+
+    async deleteCol(col) {
+      const count = this.ticketsByCol(col.name).length;
+      if (count > 0) {
+        alert('Cannot delete column "' + col.display_name + '": it has ' + count + ' ticket(s). Move them first.');
+        return;
+      }
+      if (!confirm('Delete column "' + col.display_name + '"?')) return;
+      const resp = await fetch('/api/kanban/columns/' + col.id, {method: 'DELETE'});
+      if (resp.ok) {
+        await this.loadData();
+      } else {
+        const data = await resp.json();
+        alert(data.error || 'Failed to delete column');
+      }
+    },
+
+    initColumnSortable() {
+      const app = this;
+      const el = document.getElementById('columns-container');
+      if (!el) return;
+      Sortable.create(el, {
+        animation: 200,
+        handle: '.cursor-grab',
+        ghostClass: 'opacity-30',
+        onEnd: async function() {
+          const ids = Array.from(el.querySelectorAll('[data-col-id]')).map(e => parseInt(e.dataset.colId));
+          await fetch('/api/kanban/columns/reorder', {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ordered_ids: ids}),
+          });
+          await app.loadData();
+        }
+      });
+    },
+
+    initSortable(el, colName) {
       const app = this;
       Sortable.create(el, {
         group: 'kanban',
@@ -153,7 +270,7 @@ function kanbanApp() {
               headers: {'Content-Type': 'application/json'},
               body: JSON.stringify({status: targetCol}),
             });
-            await app.loadTickets();
+            await app.loadData();
           }
         }
       });

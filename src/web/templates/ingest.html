@@ -4,32 +4,32 @@
 <div x-data="ingestApp()" class="max-w-4xl mx-auto space-y-6">
 
   <!-- Scope and type selection -->
-  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-    <h2 class="text-lg font-semibold text-gray-800 mb-4">Knowledge Ingestion</h2>
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Knowledge Ingestion</h2>
     <div class="grid grid-cols-2 gap-6">
       <div>
-        <label class="text-sm font-medium text-gray-700 block mb-2">Scope</label>
+        <label class="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-2">Scope</label>
         <div class="flex gap-4">
           <label class="flex items-center gap-2 cursor-pointer">
             <input type="radio" x-model="scope" value="standard" class="text-sap-600">
-            <span class="text-sm">Standard KB</span>
+            <span class="text-sm text-gray-700 dark:text-gray-300">Standard KB</span>
           </label>
           <label class="flex items-center gap-2 cursor-pointer">
             <input type="radio" x-model="scope" value="client" class="text-sap-600">
-            <span class="text-sm">Client KB</span>
+            <span class="text-sm text-gray-700 dark:text-gray-300">Client KB</span>
           </label>
         </div>
       </div>
       <div>
-        <label class="text-sm font-medium text-gray-700 block mb-2">Input Type</label>
+        <label class="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-2">Input Type</label>
         <div class="flex gap-4">
           <label class="flex items-center gap-2 cursor-pointer">
             <input type="radio" x-model="inputType" value="text" class="text-sap-600">
-            <span class="text-sm">Text</span>
+            <span class="text-sm text-gray-700 dark:text-gray-300">Text</span>
           </label>
           <label class="flex items-center gap-2 cursor-pointer">
             <input type="radio" x-model="inputType" value="file" class="text-sap-600">
-            <span class="text-sm">PDF / DOCX</span>
+            <span class="text-sm text-gray-700 dark:text-gray-300">PDF / DOCX</span>
           </label>
         </div>
       </div>
@@ -37,46 +37,46 @@
   </div>
 
   <!-- Text input -->
-  <div x-show="inputType === 'text'" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-    <label class="text-sm font-medium text-gray-700 block mb-2">Paste SAP knowledge content</label>
+  <div x-show="inputType === 'text'" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <label class="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-2">Paste SAP knowledge content</label>
     <textarea x-model="text" rows="12" placeholder="Paste incident notes, resolution steps, runbook content..."
-              class="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm font-mono focus:ring-2 focus:ring-sap-500"></textarea>
+              class="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-4 py-3 text-sm font-mono focus:ring-2 focus:ring-sap-500"></textarea>
   </div>
 
   <!-- File upload -->
-  <div x-show="inputType === 'file'" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-    <label class="text-sm font-medium text-gray-700 block mb-2">Upload PDF or DOCX file</label>
-    <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-sap-500 transition cursor-pointer"
+  <div x-show="inputType === 'file'" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <label class="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-2">Upload PDF or DOCX file</label>
+    <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center hover:border-sap-500 transition cursor-pointer"
          @click="$refs.fileInput.click()"
          @dragover.prevent="dragover = true"
          @dragleave="dragover = false"
          @drop.prevent="handleDrop($event)"
-         :class="dragover ? 'border-sap-500 bg-sap-50' : ''">
+         :class="dragover ? 'border-sap-500 bg-sap-50 dark:bg-sap-600/20' : ''">
       <input type="file" x-ref="fileInput" @change="handleFile($event)" accept=".pdf,.docx,.doc" class="hidden">
-      <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
       </svg>
-      <p class="text-sm text-gray-500" x-text="fileName || 'Click or drop a file here'"></p>
+      <p class="text-sm text-gray-500 dark:text-gray-400" x-text="fileName || 'Click or drop a file here'"></p>
     </div>
   </div>
 
   <!-- Submit -->
   <div class="flex items-center gap-4">
     <button @click="submit()" :disabled="processing"
-            class="bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition">
+            class="bg-green-600 hover:bg-green-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition">
       <span x-show="!processing">Ingest & Synthesize</span>
       <span x-show="processing" class="flex items-center gap-2">
         <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>
         Processing...
       </span>
     </button>
-    <span x-show="statusMsg" class="text-sm" :class="statusType === 'error' ? 'text-red-600' : 'text-green-600'" x-text="statusMsg"></span>
+    <span x-show="statusMsg" class="text-sm" :class="statusType === 'error' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'" x-text="statusMsg"></span>
   </div>
 
   <!-- Result -->
-  <div x-show="result" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-    <h3 class="text-sm font-semibold text-gray-700 mb-2">Result</h3>
-    <p class="text-sm text-gray-600" x-text="result"></p>
+  <div x-show="result" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Result</h3>
+    <p class="text-sm text-gray-600 dark:text-gray-300" x-text="result"></p>
   </div>
 </div>
 

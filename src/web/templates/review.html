@@ -4,14 +4,14 @@
 <div x-data="reviewApp()" x-init="loadItems()" class="flex gap-6 h-[calc(100vh-8rem)]">
 
   <!-- Left: Item list -->
-  <div class="w-96 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col">
-    <div class="px-4 py-3 border-b border-gray-200 space-y-3">
+  <div class="w-96 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col">
+    <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 space-y-3">
       <div class="flex gap-2">
-        <select x-model="scope" @change="loadItems()" class="border rounded-lg px-3 py-1.5 text-sm flex-1">
+        <select x-model="scope" @change="loadItems()" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm flex-1">
           <option value="standard">Standard</option>
           <option value="client">Client</option>
         </select>
-        <select x-model="statusFilter" @change="loadItems()" class="border rounded-lg px-3 py-1.5 text-sm flex-1">
+        <select x-model="statusFilter" @change="loadItems()" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm flex-1">
           <option value="ALL">All</option>
           <option value="DRAFT" selected>Draft</option>
           <option value="APPROVED">Approved</option>
@@ -22,74 +22,74 @@
     <div class="flex-1 overflow-y-auto">
       <template x-for="item in items" :key="item.kb_id">
         <div @click="selectItem(item)"
-             :class="selected && selected.kb_id === item.kb_id ? 'bg-sap-50 border-l-4 border-sap-600' : 'border-l-4 border-transparent hover:bg-gray-50'"
-             class="px-4 py-3 border-b border-gray-100 cursor-pointer transition">
+             :class="selected && selected.kb_id === item.kb_id ? 'bg-sap-50 dark:bg-sap-600/20 border-l-4 border-sap-600' : 'border-l-4 border-transparent hover:bg-gray-50 dark:hover:bg-gray-700'"
+             class="px-4 py-3 border-b border-gray-100 dark:border-gray-700 cursor-pointer transition">
           <div class="flex items-center gap-2">
             <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
                   :class="{
-                    'bg-yellow-100 text-yellow-700': item.status === 'DRAFT',
-                    'bg-green-100 text-green-700': item.status === 'APPROVED',
-                    'bg-red-100 text-red-700': item.status === 'REJECTED',
+                    'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300': item.status === 'DRAFT',
+                    'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300': item.status === 'APPROVED',
+                    'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300': item.status === 'REJECTED',
                   }" x-text="item.status"></span>
-            <span class="text-xs text-gray-400" x-text="item.type"></span>
+            <span class="text-xs text-gray-400 dark:text-gray-500" x-text="item.type"></span>
           </div>
-          <div class="text-sm font-medium text-gray-800 mt-1" x-text="item.title"></div>
-          <div class="text-xs text-gray-400 mt-1">v<span x-text="item.version"></span></div>
+          <div class="text-sm font-medium text-gray-800 dark:text-gray-100 mt-1" x-text="item.title"></div>
+          <div class="text-xs text-gray-400 dark:text-gray-500 mt-1">v<span x-text="item.version"></span></div>
         </div>
       </template>
-      <div x-show="items.length === 0" class="p-6 text-center text-sm text-gray-400">No items found.</div>
+      <div x-show="items.length === 0" class="p-6 text-center text-sm text-gray-400 dark:text-gray-500">No items found.</div>
     </div>
   </div>
 
   <!-- Right: Detail -->
-  <div class="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col">
+  <div class="flex-1 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col">
     <template x-if="!selected">
-      <div class="flex-1 flex items-center justify-center text-gray-400 text-sm">Select an item to review.</div>
+      <div class="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm">Select an item to review.</div>
     </template>
     <template x-if="selected">
       <div class="flex flex-col h-full">
-        <div class="px-6 py-4 border-b border-gray-200 space-y-3">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 space-y-3">
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="text-xs font-medium text-gray-500">Type</label>
-              <input :value="selected.type" disabled class="w-full border rounded-lg px-3 py-1.5 text-sm bg-gray-50">
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Type</label>
+              <input :value="selected.type" disabled class="w-full border dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-300">
             </div>
             <div>
-              <label class="text-xs font-medium text-gray-500">Status</label>
-              <input :value="selected.status" disabled class="w-full border rounded-lg px-3 py-1.5 text-sm bg-gray-50">
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Status</label>
+              <input :value="selected.status" disabled class="w-full border dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-300">
             </div>
           </div>
           <div>
-            <label class="text-xs font-medium text-gray-500">Title</label>
-            <input x-model="selected.title" class="w-full border rounded-lg px-3 py-2 text-sm">
+            <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Title</label>
+            <input x-model="selected.title" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="text-xs font-medium text-gray-500">Tags (comma-separated)</label>
-              <input x-model="tagsStr" class="w-full border rounded-lg px-3 py-1.5 text-sm">
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Tags (comma-separated)</label>
+              <input x-model="tagsStr" class="w-full border dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
             </div>
             <div>
-              <label class="text-xs font-medium text-gray-500">SAP Objects (comma-separated)</label>
-              <input x-model="sapStr" class="w-full border rounded-lg px-3 py-1.5 text-sm">
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400">SAP Objects (comma-separated)</label>
+              <input x-model="sapStr" class="w-full border dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
             </div>
           </div>
         </div>
         <div class="flex-1 px-6 py-4 flex flex-col">
-          <label class="text-xs font-medium text-gray-500 mb-1">Content (Markdown)</label>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Content (Markdown)</label>
           <textarea x-model="selected.content_markdown"
-                    class="flex-1 border rounded-lg px-3 py-2 text-sm font-mono resize-none"></textarea>
+                    class="flex-1 border dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-mono resize-none bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
         </div>
-        <div class="px-6 py-4 border-t border-gray-200 flex gap-3">
+        <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex gap-3">
           <button @click="approve()" :disabled="processing"
-                  class="bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white px-6 py-2 rounded-lg text-sm font-medium transition">
+                  class="bg-green-600 hover:bg-green-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white px-6 py-2 rounded-lg text-sm font-medium transition">
             Approve & Index
           </button>
           <button @click="reject()" :disabled="processing"
-                  class="bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white px-6 py-2 rounded-lg text-sm font-medium transition">
+                  class="bg-red-600 hover:bg-red-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white px-6 py-2 rounded-lg text-sm font-medium transition">
             Reject
           </button>
           <div class="flex-1"></div>
-          <span x-show="message" class="text-sm self-center" :class="messageType === 'error' ? 'text-red-600' : 'text-green-600'" x-text="message"></span>
+          <span x-show="message" class="text-sm self-center" :class="messageType === 'error' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'" x-text="message"></span>
         </div>
       </div>
     </template>

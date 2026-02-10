@@ -11,7 +11,25 @@ from pathlib import Path
 from typing import Optional
 
 
+DEFAULT_COLUMNS = [
+    {"name": "OPEN", "display_name": "Open", "position": 0},
+    {"name": "IN_PROGRESS", "display_name": "In Progress", "position": 1},
+    {"name": "WAITING", "display_name": "Waiting", "position": 2},
+    {"name": "DONE", "display_name": "Done", "position": 3},
+]
+
+
+@dataclass
+class KanbanColumn:
+    id: int
+    name: str
+    display_name: str
+    position: int
+    created_at: str
+
+
 class TicketStatus:
+    """Status constants matching default column names."""
     OPEN = "OPEN"
     IN_PROGRESS = "IN_PROGRESS"
     WAITING = "WAITING"
@@ -67,6 +85,15 @@ class KanbanRepository:
         """Initialize kanban tables."""
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
+                CREATE TABLE IF NOT EXISTS kanban_columns (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL UNIQUE,
+                    display_name TEXT NOT NULL,
+                    position INTEGER NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+            """)
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS tickets (
                     id TEXT PRIMARY KEY,
                     ticket_id TEXT,
@@ -99,6 +126,17 @@ class KanbanRepository:
                 CREATE INDEX IF NOT EXISTS idx_ticket_history_ticket_id
                 ON ticket_history(ticket_id)
             """)
+
+            # Seed default columns if none exist
+            count = conn.execute("SELECT COUNT(*) FROM kanban_columns").fetchone()[0]
+            if count == 0:
+                now = datetime.now(UTC).isoformat()
+                for col in DEFAULT_COLUMNS:
+                    conn.execute(
+                        "INSERT INTO kanban_columns (name, display_name, position, created_at) VALUES (?, ?, ?, ?)",
+                        (col["name"], col["display_name"], col["position"], now),
+                    )
+
             conn.commit()
 
     def create_ticket(
@@ -115,7 +153,7 @@ class KanbanRepository:
 
         internal_id = str(uuid.uuid4())
         now = datetime.now(UTC).isoformat()
-        status = TicketStatus.OPEN
+        status = "OPEN"
 
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
@@ -173,7 +211,7 @@ class KanbanRepository:
 
             old_status = row[0]
 
-            closed_at = now if new_status in (TicketStatus.DONE, TicketStatus.CLOSED) else None
+            closed_at = now if new_status in ("DONE", "CLOSED") else None
 
             conn.execute(
                 "UPDATE tickets SET status = ?, updated_at = ?, closed_at = COALESCE(?, closed_at) WHERE id = ?",
@@ -262,3 +300,75 @@ class KanbanRepository:
             ).fetchall()
 
             return [TicketHistoryEntry(*r) for r in rows]
+
+    # ── Column management ──
+
+    def list_columns(self) -> list[KanbanColumn]:
+        """List all columns ordered by position."""
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT id, name, display_name, position, created_at FROM kanban_columns ORDER BY position ASC"
+            ).fetchall()
+            return [KanbanColumn(*r) for r in rows]
+
+    def create_column(self, name: str, display_name: str) -> KanbanColumn:
+        """Create a new column at the end."""
+        now = datetime.now(UTC).isoformat()
+        with sqlite3.connect(self.db_path) as conn:
+            max_pos = conn.execute("SELECT COALESCE(MAX(position), -1) FROM kanban_columns").fetchone()[0]
+            conn.execute(
+                "INSERT INTO kanban_columns (name, display_name, position, created_at) VALUES (?, ?, ?, ?)",
+                (name, display_name, max_pos + 1, now),
+            )
+            conn.commit()
+            row = conn.execute(
+                "SELECT id, name, display_name, position, created_at FROM kanban_columns WHERE name = ?",
+                (name,),
+            ).fetchone()
+            return KanbanColumn(*row)
+
+    def rename_column(self, col_id: int, display_name: str) -> Optional[KanbanColumn]:
+        """Rename a column's display name."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE kanban_columns SET display_name = ? WHERE id = ?",
+                (display_name, col_id),
+            )
+            conn.commit()
+            row = conn.execute(
+                "SELECT id, name, display_name, position, created_at FROM kanban_columns WHERE id = ?",
+                (col_id,),
+            ).fetchone()
+            return KanbanColumn(*row) if row else None
+
+    def delete_column(self, col_id: int) -> bool:
+        """Delete a column. Returns False if column has tickets."""
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT name FROM kanban_columns WHERE id = ?", (col_id,)
+            ).fetchone()
+            if not row:
+                return False
+
+            col_name = row[0]
+            ticket_count = conn.execute(
+                "SELECT COUNT(*) FROM tickets WHERE status = ?", (col_name,)
+            ).fetchone()[0]
+
+            if ticket_count > 0:
+                raise ValueError(f"Column '{col_name}' has {ticket_count} ticket(s). Move them first.")
+
+            conn.execute("DELETE FROM kanban_columns WHERE id = ?", (col_id,))
+            conn.commit()
+            return True
+
+    def reorder_columns(self, ordered_ids: list[int]) -> list[KanbanColumn]:
+        """Reorder columns by providing IDs in desired order."""
+        with sqlite3.connect(self.db_path) as conn:
+            for position, col_id in enumerate(ordered_ids):
+                conn.execute(
+                    "UPDATE kanban_columns SET position = ? WHERE id = ?",
+                    (position, col_id),
+                )
+            conn.commit()
+        return self.list_columns()
