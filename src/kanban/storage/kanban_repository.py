@@ -12,13 +12,14 @@ from typing import Optional
 
 
 DEFAULT_COLUMNS = [
-    {"name": "EN_PROGRESO", "display_name": "En progreso", "position": 0},
-    {"name": "MAS_INFO", "display_name": "Mas info", "position": 1},
-    {"name": "ANALIZADO", "display_name": "Analizado", "position": 2},
-    {"name": "ANALIZADO_PENDIENTE_RESPUESTA", "display_name": "Analizado- Pendiente respuesta", "position": 3},
+    {"name": "NO_ANALIZADO", "display_name": "No analizado", "position": 0},
+    {"name": "EN_PROGRESO", "display_name": "En progreso", "position": 1},
+    {"name": "MAS_INFO", "display_name": "Mas info", "position": 2},
+    {"name": "TESTING", "display_name": "Testing", "position": 3},
     {"name": "PENDIENTE_DE_TRANSPORTE", "display_name": "Pendiente de transporte", "position": 4},
-    {"name": "TESTING", "display_name": "Testing", "position": 5},
-    {"name": "CERRADO", "display_name": "Cerrado", "position": 6},
+    {"name": "ANALIZADO_PENDIENTE_RESPUESTA", "display_name": "Analizado - Pendiente respuesta", "position": 5},
+    {"name": "ANALIZADO", "display_name": "Analizado", "position": 6},
+    {"name": "CERRADO", "display_name": "Cerrado", "position": 7},
 ]
 
 
@@ -33,12 +34,13 @@ class KanbanColumn:
 
 class TicketStatus:
     """Status constants matching default column names."""
+    NO_ANALIZADO = "NO_ANALIZADO"
     EN_PROGRESO = "EN_PROGRESO"
     MAS_INFO = "MAS_INFO"
-    ANALIZADO = "ANALIZADO"
-    ANALIZADO_PENDIENTE_RESPUESTA = "ANALIZADO_PENDIENTE_RESPUESTA"
-    PENDIENTE_DE_TRANSPORTE = "PENDIENTE_DE_TRANSPORTE"
     TESTING = "TESTING"
+    PENDIENTE_DE_TRANSPORTE = "PENDIENTE_DE_TRANSPORTE"
+    ANALIZADO_PENDIENTE_RESPUESTA = "ANALIZADO_PENDIENTE_RESPUESTA"
+    ANALIZADO = "ANALIZADO"
     CERRADO = "CERRADO"
 
 

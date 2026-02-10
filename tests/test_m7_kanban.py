@@ -241,21 +241,22 @@ def test_kanban_db_has_no_assistant_tables(tmp_path):
 
 
 def test_init_seeds_default_columns(tmp_path):
-    """Test that init creates the 7 default columns."""
+    """Test that init creates the 8 default columns."""
     db_path = tmp_path / "kanban.sqlite"
     repo = KanbanRepository(db_path)
 
     columns = repo.list_columns()
-    assert len(columns) == 7
-    assert columns[0].name == "EN_PROGRESO"
-    assert columns[0].display_name == "En progreso"
+    assert len(columns) == 8
+    assert columns[0].name == "NO_ANALIZADO"
+    assert columns[0].display_name == "No analizado"
     assert columns[0].position == 0
-    assert columns[1].name == "MAS_INFO"
-    assert columns[2].name == "ANALIZADO"
-    assert columns[3].name == "ANALIZADO_PENDIENTE_RESPUESTA"
+    assert columns[1].name == "EN_PROGRESO"
+    assert columns[2].name == "MAS_INFO"
+    assert columns[3].name == "TESTING"
     assert columns[4].name == "PENDIENTE_DE_TRANSPORTE"
-    assert columns[5].name == "TESTING"
-    assert columns[6].name == "CERRADO"
+    assert columns[5].name == "ANALIZADO_PENDIENTE_RESPUESTA"
+    assert columns[6].name == "ANALIZADO"
+    assert columns[7].name == "CERRADO"
 
 
 def test_list_columns_ordered(tmp_path):
@@ -276,10 +277,10 @@ def test_create_column(tmp_path):
     col = repo.create_column("CUSTOM", "Custom Column")
     assert col.name == "CUSTOM"
     assert col.display_name == "Custom Column"
-    assert col.position == 7  # After the 7 defaults (0-6)
+    assert col.position == 8  # After the 8 defaults (0-7)
 
     columns = repo.list_columns()
-    assert len(columns) == 8
+    assert len(columns) == 9
     assert columns[-1].name == "CUSTOM"
 
 
@@ -298,10 +299,10 @@ def test_rename_column(tmp_path):
     repo = KanbanRepository(db_path)
 
     columns = repo.list_columns()
-    col = columns[0]  # EN_PROGRESO
+    col = columns[0]  # NO_ANALIZADO
     renamed = repo.rename_column(col.id, "Nuevo Nombre")
     assert renamed.display_name == "Nuevo Nombre"
-    assert renamed.name == "EN_PROGRESO"  # Internal name unchanged
+    assert renamed.name == "NO_ANALIZADO"  # Internal name unchanged
 
 
 def test_rename_column_nonexistent(tmp_path):
@@ -360,12 +361,13 @@ def test_reorder_columns(tmp_path):
     reordered = repo.reorder_columns(reversed_ids)
 
     assert reordered[0].name == "CERRADO"
-    assert reordered[1].name == "TESTING"
-    assert reordered[2].name == "PENDIENTE_DE_TRANSPORTE"
-    assert reordered[3].name == "ANALIZADO_PENDIENTE_RESPUESTA"
-    assert reordered[4].name == "ANALIZADO"
+    assert reordered[1].name == "ANALIZADO"
+    assert reordered[2].name == "ANALIZADO_PENDIENTE_RESPUESTA"
+    assert reordered[3].name == "PENDIENTE_DE_TRANSPORTE"
+    assert reordered[4].name == "TESTING"
     assert reordered[5].name == "MAS_INFO"
     assert reordered[6].name == "EN_PROGRESO"
+    assert reordered[7].name == "NO_ANALIZADO"
 
     # Verify positions are sequential
     for i, col in enumerate(reordered):
