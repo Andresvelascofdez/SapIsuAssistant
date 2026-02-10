@@ -80,8 +80,13 @@ def test_ensure_collection_exists_creates_if_missing(mock_qdrant_client):
 
 
 def test_ensure_collection_exists_skips_if_exists(mock_qdrant_client):
-    """Test collection creation is skipped if exists."""
+    """Test collection creation is skipped if exists with correct dimensions."""
     mock_qdrant_client.collection_exists.return_value = True
+
+    # Mock get_collection to return correct vector size
+    mock_info = Mock()
+    mock_info.config.params.vectors.size = 3072
+    mock_qdrant_client.get_collection.return_value = mock_info
 
     service = QdrantService()
     service.ensure_collection_exists("standard", None)
@@ -93,6 +98,11 @@ def test_ensure_collection_exists_skips_if_exists(mock_qdrant_client):
 def test_upsert_kb_item_approved(mock_qdrant_client):
     """Test upserting APPROVED KB item per PLAN.md section 4.5."""
     mock_qdrant_client.collection_exists.return_value = True
+
+    # Mock get_collection to return correct vector size
+    mock_info = Mock()
+    mock_info.config.params.vectors.size = 3072
+    mock_qdrant_client.get_collection.return_value = mock_info
 
     kb_item = KBItem(
         kb_id="test-id-123",

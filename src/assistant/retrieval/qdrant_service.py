@@ -2,6 +2,7 @@
 Qdrant service for vector storage and retrieval per PLAN.md section 4.
 """
 import json
+import logging
 from pathlib import Path
 from typing import Optional
 from uuid import UUID
@@ -11,6 +12,8 @@ from qdrant_client.models import Distance, PointStruct, VectorParams
 
 from src.assistant.storage.kb_repository import KBItemRepository
 from src.assistant.storage.models import KBItem
+
+log = logging.getLogger(__name__)
 
 
 class QdrantService:
@@ -64,14 +67,25 @@ class QdrantService:
     def ensure_collection_exists(self, client_scope: str, client_code: Optional[str]):
         """
         Create collection if it doesn't exist per PLAN.md section 4.1.
-
-        Args:
-            client_scope: "standard" or "client"
-            client_code: Client code (required if scope="client")
+        Validates vector dimensions match on existing collections.
         """
         collection_name = self._get_collection_name(client_scope, client_code)
 
-        if not self.client.collection_exists(collection_name):
+        if self.client.collection_exists(collection_name):
+            info = self.client.get_collection(collection_name)
+            existing_size = getattr(info.config.params.vectors, "size", None)
+            if existing_size and existing_size != self.VECTOR_SIZE:
+                log.error(
+                    "Collection %s has vector size %d, expected %d. "
+                    "Delete and recreate the collection.",
+                    collection_name, existing_size, self.VECTOR_SIZE,
+                )
+                raise ValueError(
+                    f"Collection '{collection_name}' vector size mismatch: "
+                    f"has {existing_size}, expected {self.VECTOR_SIZE}. "
+                    f"Delete and recreate the collection."
+                )
+        else:
             self.client.create_collection(
                 collection_name=collection_name,
                 vectors_config=VectorParams(

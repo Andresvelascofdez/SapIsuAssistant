@@ -282,3 +282,55 @@ class KBItemRepository:
             conn.commit()
 
         return self.get_by_id(kb_id)
+
+    def update_fields(
+        self,
+        kb_id: str,
+        title: Optional[str] = None,
+        content_markdown: Optional[str] = None,
+        tags: Optional[list[str]] = None,
+        sap_objects: Optional[list[str]] = None,
+    ) -> Optional[KBItem]:
+        """Update editable fields and recompute content_hash."""
+        now = datetime.now(UTC).isoformat()
+        updates = []
+        params = []
+
+        if title is not None:
+            updates.append("title = ?")
+            params.append(title)
+        if content_markdown is not None:
+            updates.append("content_markdown = ?")
+            params.append(content_markdown)
+        if tags is not None:
+            updates.append("tags_json = ?")
+            params.append(json.dumps(tags))
+        if sap_objects is not None:
+            updates.append("sap_objects_json = ?")
+            params.append(json.dumps(sap_objects))
+
+        if not updates:
+            return self.get_by_id(kb_id)
+
+        current = self.get_by_id(kb_id)
+        if not current:
+            return None
+
+        new_title = title if title is not None else current.title
+        new_content = content_markdown if content_markdown is not None else current.content_markdown
+        new_hash = self._compute_content_hash(new_content, new_title, current.type)
+        updates.append("content_hash = ?")
+        params.append(new_hash)
+
+        updates.append("updated_at = ?")
+        params.append(now)
+        params.append(kb_id)
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                f"UPDATE kb_items SET {', '.join(updates)} WHERE kb_id = ?",
+                params,
+            )
+            conn.commit()
+
+        return self.get_by_id(kb_id)

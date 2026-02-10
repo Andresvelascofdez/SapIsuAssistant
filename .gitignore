@@ -49,6 +49,8 @@ Thumbs.db
 # Temporary files
 tmp*
 temp*
+!**/templates/
+!**/templates/**
 *_v2.*
 *_final.*
 debug.*
