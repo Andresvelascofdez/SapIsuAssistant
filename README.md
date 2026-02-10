@@ -99,9 +99,9 @@ See `PLAN.md` for detailed implementation plan.
 ## Current Status
 
 - [x] M0: Repo setup, CI, Qdrant Docker
-- [ ] M1: Client manager
-- [ ] M2: Assistant SQLite repos
-- [ ] M3: Qdrant integration
+- [x] M1: Client manager + storage layout
+- [x] M2: Assistant SQLite repos (KB items + ingestions, dedupe, versioning)
+- [x] M3: Qdrant integration (collections, upsert, search)
 - [ ] M4: Document extraction
 - [ ] M5: OpenAI synthesis pipeline
 - [ ] M6: Assistant chat RAG
