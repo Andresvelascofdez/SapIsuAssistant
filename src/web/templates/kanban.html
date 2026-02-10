@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% set active_tab = "kanban" %}
+{% block content %}
+<div x-data="kanbanApp()" x-init="loadTickets()" class="h-[calc(100vh-8rem)]">
+
+  <!-- Top bar -->
+  <div class="flex items-center gap-4 mb-6">
+    <button @click="showNewModal = true"
+            class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+      + New Ticket
+    </button>
+    <button @click="loadTickets()"
+            class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition">
+      Refresh
+    </button>
+    <span class="text-sm text-gray-500" x-text="statusText"></span>
+  </div>
+
+  <!-- Board columns -->
+  <div class="grid grid-cols-4 gap-4 h-[calc(100%-4rem)]">
+    <template x-for="col in columns" :key="col">
+      <div class="flex flex-col bg-gray-100 rounded-xl">
+        <div class="px-4 py-3 border-b border-gray-200">
+          <h3 class="text-sm font-bold text-gray-700" x-text="col.replace('_', ' ')"></h3>
+          <span class="text-xs text-gray-400" x-text="ticketsByCol(col).length + ' tickets'"></span>
+        </div>
+        <div class="flex-1 overflow-y-auto p-3 space-y-2 min-h-[100px]"
+             :id="'col-' + col"
+             x-init="initSortable($el, col)">
+          <template x-for="ticket in ticketsByCol(col)" :key="ticket.id">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-3 cursor-grab active:cursor-grabbing"
+                 :data-id="ticket.id"
+                 @click="selectTicket(ticket)">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                      :class="{
+                        'bg-red-100 text-red-700': ticket.priority === 'CRITICAL',
+                        'bg-orange-100 text-orange-700': ticket.priority === 'HIGH',
+                        'bg-blue-100 text-blue-700': ticket.priority === 'MEDIUM',
+                        'bg-gray-100 text-gray-600': ticket.priority === 'LOW',
+                      }" x-text="ticket.priority"></span>
+              </div>
+              <div class="text-sm font-medium text-gray-800" x-text="ticket.title"></div>
+              <div x-show="ticket.notes" class="text-xs text-gray-500 mt-1 truncate" x-text="ticket.notes"></div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- New ticket modal -->
+  <div x-show="showNewModal" x-transition class="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+    <div class="bg-white rounded-xl shadow-xl w-96 p-6" @click.outside="showNewModal = false">
+      <h3 class="text-lg font-semibold mb-4">New Ticket</h3>
+      <div class="space-y-3">
+        <input x-model="newTicket.title" placeholder="Title" class="w-full border rounded-lg px-3 py-2 text-sm">
+        <select x-model="newTicket.priority" class="w-full border rounded-lg px-3 py-2 text-sm">
+          <option value="LOW">Low</option><option value="MEDIUM" selected>Medium</option>
+          <option value="HIGH">High</option><option value="CRITICAL">Critical</option>
+        </select>
+        <textarea x-model="newTicket.notes" placeholder="Notes (optional)" rows="3" class="w-full border rounded-lg px-3 py-2 text-sm"></textarea>
+      </div>
+      <div class="flex justify-end gap-3 mt-4">
+        <button @click="showNewModal = false" class="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
+        <button @click="createTicket()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail modal -->
+  <div x-show="selectedTicket" x-transition class="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+    <div class="bg-white rounded-xl shadow-xl w-[480px] p-6" @click.outside="selectedTicket = null">
+      <h3 class="text-lg font-semibold mb-4">Ticket Detail</h3>
+      <template x-if="selectedTicket">
+        <div class="space-y-3">
+          <input x-model="selectedTicket.title" class="w-full border rounded-lg px-3 py-2 text-sm">
+          <select x-model="selectedTicket.priority" class="w-full border rounded-lg px-3 py-2 text-sm">
+            <option value="LOW">Low</option><option value="MEDIUM">Medium</option>
+            <option value="HIGH">High</option><option value="CRITICAL">Critical</option>
+          </select>
+          <textarea x-model="selectedTicket.notes" rows="3" class="w-full border rounded-lg px-3 py-2 text-sm"></textarea>
+          <div class="flex justify-end gap-3 mt-4">
+            <button @click="selectedTicket = null" class="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Close</button>
+            <button @click="saveTicket()" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Save</button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+</div>
+
+<script>
+function kanbanApp() {
+  return {
+    columns: ['OPEN', 'IN_PROGRESS', 'WAITING', 'DONE'],
+    tickets: [],
+    showNewModal: false,
+    selectedTicket: null,
+    statusText: '',
+    newTicket: {title: '', priority: 'MEDIUM', notes: ''},
+
+    ticketsByCol(col) {
+      return this.tickets.filter(t => t.status === col);
+    },
+
+    async loadTickets() {
+      const resp = await fetch('/api/kanban/tickets');
+      this.tickets = await resp.json();
+      this.statusText = this.tickets.length + ' tickets';
+    },
+
+    async createTicket() {
+      if (!this.newTicket.title.trim()) return;
+      await fetch('/api/kanban/tickets', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(this.newTicket),
+      });
+      this.newTicket = {title: '', priority: 'MEDIUM', notes: ''};
+      this.showNewModal = false;
+      await this.loadTickets();
+    },
+
+    selectTicket(ticket) {
+      this.selectedTicket = {...ticket};
+    },
+
+    async saveTicket() {
+      if (!this.selectedTicket) return;
+      await fetch('/api/kanban/tickets/' + this.selectedTicket.id, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(this.selectedTicket),
+      });
+      this.selectedTicket = null;
+      await this.loadTickets();
+    },
+
+    initSortable(el, col) {
+      const app = this;
+      Sortable.create(el, {
+        group: 'kanban',
+        animation: 200,
+        ghostClass: 'opacity-30',
+        dragClass: 'shadow-lg',
+        onEnd: async function(evt) {
+          const ticketId = evt.item.dataset.id;
+          const targetCol = evt.to.id.replace('col-', '');
+          if (ticketId && targetCol) {
+            await fetch('/api/kanban/tickets/' + ticketId + '/move', {
+              method: 'PUT',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({status: targetCol}),
+            });
+            await app.loadTickets();
+          }
+        }
+      });
+    },
+  }
+}
+</script>
+{% endblock %}

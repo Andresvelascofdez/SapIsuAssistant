@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% set active_tab = "chat" %}
+{% block content %}
+<div x-data="chatApp()" class="flex gap-6 h-[calc(100vh-8rem)]">
+
+  <!-- Chat panel -->
+  <div class="flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-gray-200">
+    <!-- Messages -->
+    <div class="flex-1 overflow-y-auto p-6 space-y-4" x-ref="messages">
+      <template x-for="(msg, i) in messages" :key="i">
+        <div :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
+          <div :class="msg.role === 'user'
+            ? 'bg-sap-600 text-white rounded-2xl rounded-br-md px-4 py-3 max-w-[70%]'
+            : 'bg-gray-100 text-gray-800 rounded-2xl rounded-bl-md px-4 py-3 max-w-[70%]'">
+            <div class="text-sm whitespace-pre-wrap" x-text="msg.text"></div>
+          </div>
+        </div>
+      </template>
+      <div x-show="thinking" class="flex justify-start">
+        <div class="bg-gray-100 rounded-2xl rounded-bl-md px-4 py-3">
+          <div class="flex items-center gap-2 text-sm text-gray-500">
+            <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>
+            Processing...
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div class="border-t border-gray-200 p-4">
+      <div class="flex gap-3">
+        <select x-model="effort" class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-28">
+          <option value="high">High</option>
+          <option value="xhigh">X-High</option>
+        </select>
+        <input x-model="question" @keydown.enter="send()"
+               placeholder="Ask about SAP IS-U..."
+               class="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-sap-500 focus:border-sap-500"
+               :disabled="thinking">
+        <button @click="send()" :disabled="thinking || !question.trim()"
+                class="bg-sap-600 hover:bg-sap-700 disabled:bg-gray-300 text-white px-6 py-2 rounded-lg text-sm font-medium transition">
+          Send
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sources panel -->
+  <div class="w-80 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col">
+    <div class="px-4 py-3 border-b border-gray-200">
+      <h3 class="text-sm font-semibold text-gray-700">Sources</h3>
+    </div>
+    <div class="flex-1 overflow-y-auto p-4 space-y-3">
+      <template x-if="sources.length === 0">
+        <p class="text-xs text-gray-400 italic">Sources will appear here after a question is answered.</p>
+      </template>
+      <template x-for="(src, i) in sources" :key="i">
+        <div class="border border-gray-200 rounded-lg p-3">
+          <div class="text-xs font-semibold text-sap-600" x-text="src.type"></div>
+          <div class="text-sm font-medium text-gray-800 mt-1" x-text="src.title"></div>
+          <div class="flex flex-wrap gap-1 mt-2">
+            <template x-for="tag in src.tags" :key="tag">
+              <span class="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full" x-text="tag"></span>
+            </template>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+</div>
+
+<script>
+function chatApp() {
+  return {
+    messages: [],
+    sources: [],
+    question: '',
+    effort: 'high',
+    thinking: false,
+    async send() {
+      const q = this.question.trim();
+      if (!q || this.thinking) return;
+      this.messages.push({role: 'user', text: q});
+      this.question = '';
+      this.thinking = true;
+      this.sources = [];
+      this.$nextTick(() => { this.$refs.messages.scrollTop = this.$refs.messages.scrollHeight; });
+
+      try {
+        const resp = await fetch('/api/chat/send', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({question: q, reasoning_effort: this.effort}),
+        });
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const {done, value} = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, {stream: true});
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const raw = line.slice(6);
+              // find event type from preceding event line
+              // SSE format: event: X\ndata: Y
+            }
+            if (line.startsWith('event: ')) {
+              this._lastEvent = line.slice(7).trim();
+            }
+            if (line.startsWith('data:')) {
+              const raw = line.slice(5).trim();
+              if (!raw) continue;
+              try {
+                const data = JSON.parse(raw);
+                if (this._lastEvent === 'answer') {
+                  this.messages.push({role: 'assistant', text: data.answer});
+                  this.sources = data.sources || [];
+                } else if (this._lastEvent === 'error') {
+                  this.messages.push({role: 'assistant', text: data.message});
+                }
+              } catch(e) {}
+            }
+          }
+        }
+      } catch(e) {
+        this.messages.push({role: 'assistant', text: 'Connection error: ' + e.message});
+      }
+      this.thinking = false;
+      this.$nextTick(() => { this.$refs.messages.scrollTop = this.$refs.messages.scrollHeight; });
+    },
+    _lastEvent: '',
+  }
+}
+</script>
+{% endblock %}

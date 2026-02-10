@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% set active_tab = "settings" %}
+{% block content %}
+<div x-data="settingsApp()" x-init="loadClients()" class="max-w-4xl mx-auto space-y-6">
+
+  <!-- Client Management -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <h2 class="text-lg font-semibold text-gray-800 mb-4">Client Management</h2>
+    <div class="grid grid-cols-3 gap-4 mb-4">
+      <input x-model="newCode" placeholder="Client code (e.g. SWE)" class="border rounded-lg px-3 py-2 text-sm">
+      <input x-model="newName" placeholder="Client name" class="border rounded-lg px-3 py-2 text-sm">
+      <button @click="registerClient()"
+              class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+        Register Client
+      </button>
+    </div>
+    <div x-show="clientMsg" class="text-sm mb-3" :class="clientMsgType === 'error' ? 'text-red-600' : 'text-green-600'" x-text="clientMsg"></div>
+    <div class="border rounded-lg divide-y">
+      <template x-for="c in clientList" :key="c.code">
+        <div class="px-4 py-3 flex justify-between items-center">
+          <div>
+            <span class="text-sm font-semibold text-gray-800" x-text="c.code"></span>
+            <span class="text-sm text-gray-500 ml-2" x-text="c.name"></span>
+          </div>
+        </div>
+      </template>
+      <div x-show="clientList.length === 0" class="px-4 py-6 text-center text-sm text-gray-400">No clients registered.</div>
+    </div>
+  </div>
+
+  <!-- Qdrant Configuration -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <h2 class="text-lg font-semibold text-gray-800 mb-4">Qdrant Vector Database</h2>
+    <div class="flex gap-4">
+      <input x-model="qdrantUrl" class="flex-1 border rounded-lg px-3 py-2 text-sm" placeholder="http://localhost:6333">
+      <button @click="applyQdrant()" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">Apply</button>
+    </div>
+    <p x-show="qdrantMsg" class="text-sm text-green-600 mt-2" x-text="qdrantMsg"></p>
+  </div>
+
+  <!-- OpenAI API Key -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <h2 class="text-lg font-semibold text-gray-800 mb-4">OpenAI API Key</h2>
+    <div class="flex gap-4">
+      <input x-model="apiKey" type="password" class="flex-1 border rounded-lg px-3 py-2 text-sm" placeholder="sk-...">
+      <button @click="setApiKey()" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">Set</button>
+    </div>
+    <p x-show="apiKeyMsg" class="text-sm text-green-600 mt-2" x-text="apiKeyMsg"></p>
+  </div>
+
+  <!-- Data Info -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <h2 class="text-lg font-semibold text-gray-800 mb-4">Data Location</h2>
+    <p class="text-sm text-gray-600">Data root: <code class="bg-gray-100 px-2 py-0.5 rounded text-xs">./data</code></p>
+  </div>
+</div>
+
+<script>
+function settingsApp() {
+  return {
+    clientList: [],
+    newCode: '', newName: '',
+    clientMsg: '', clientMsgType: 'success',
+    qdrantUrl: '{{ qdrant_url }}',
+    qdrantMsg: '',
+    apiKey: '',
+    apiKeyMsg: '',
+
+    async loadClients() {
+      const resp = await fetch('/api/settings/clients');
+      this.clientList = await resp.json();
+    },
+
+    async registerClient() {
+      this.clientMsg = '';
+      const resp = await fetch('/api/settings/client', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({code: this.newCode, name: this.newName}),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { this.clientMsg = data.error; this.clientMsgType = 'error'; return; }
+      this.clientMsg = 'Registered: ' + data.code;
+      this.clientMsgType = 'success';
+      this.newCode = ''; this.newName = '';
+      await this.loadClients();
+      window.location.reload();
+    },
+
+    async applyQdrant() {
+      await fetch('/api/settings/qdrant', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url: this.qdrantUrl}),
+      });
+      this.qdrantMsg = 'Qdrant URL updated.';
+      setTimeout(() => this.qdrantMsg = '', 3000);
+    },
+
+    async setApiKey() {
+      await fetch('/api/settings/apikey', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({key: this.apiKey}),
+      });
+      this.apiKeyMsg = 'API key set for this session.';
+      this.apiKey = '';
+      setTimeout(() => this.apiKeyMsg = '', 3000);
+    },
+  }
+}
+</script>
+{% endblock %}

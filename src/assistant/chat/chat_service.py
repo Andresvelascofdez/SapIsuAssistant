@@ -10,7 +10,8 @@ from src.assistant.retrieval.embedding_service import EmbeddingService
 from src.assistant.retrieval.qdrant_service import QdrantService
 from src.assistant.storage.kb_repository import KBItemRepository
 from src.assistant.storage.models import KBItem
-
+from src.shared.errors import format_openai_error, format_qdrant_error
+from src.shared.tokens import count_tokens, truncate_to_token_limit
 
 ASSISTANT_SYSTEM_PROMPT = """You are an SAP IS-U technical assistant. Answer questions using ONLY the provided context.
 
@@ -21,6 +22,9 @@ Hard constraints:
 - Be precise and technical. Reference SAP transactions, programs, and objects where relevant.
 - Structure your answers clearly with headings and steps where appropriate."""
 
+# Reserve tokens for system prompt + question + response
+MAX_CONTEXT_TOKENS = 100_000
+
 
 class ChatService:
     """
@@ -30,7 +34,7 @@ class ChatService:
     1. Embed the user question (text-embedding-3-large)
     2. Query Qdrant (kb_standard if enabled + kb_<ACTIVE_CLIENT>)
     3. Fetch KB items from SQLite by kb_id
-    4. Build context pack
+    4. Build context pack (with token budget)
     5. Call OpenAI for answer (gpt-5.2, reasoning effort high/xhigh)
     """
 
@@ -59,47 +63,42 @@ class ChatService:
         """
         Answer a question using RAG per PLAN.md section 10.
 
-        Args:
-            question: User question
-            kb_repo: KB repository to fetch full items
-            client_scope: "standard" or "client"
-            client_code: Active client code
-            include_standard: Whether to include standard KB
-            top_k: Number of results (default 8 per PLAN.md)
-            reasoning_effort: "high" (default) or "xhigh" per PLAN.md section 10.2
-
-        Returns:
-            ChatResult with answer and source KB items
+        Raises:
+            ChatError: With actionable error message
         """
-        # Step 1: Embed question
-        query_embedding = self.embedding_service.embed(question)
+        try:
+            query_embedding = self.embedding_service.embed(question)
+        except Exception as e:
+            raise ChatError(format_openai_error(e)) from e
 
-        # Step 2: Query Qdrant
-        search_results = self.qdrant_service.search(
-            query_embedding=query_embedding,
-            client_scope=client_scope,
-            client_code=client_code,
-            limit=top_k,
-            include_standard=include_standard,
-        )
+        try:
+            search_results = self.qdrant_service.search(
+                query_embedding=query_embedding,
+                client_scope=client_scope,
+                client_code=client_code,
+                limit=top_k,
+                include_standard=include_standard,
+            )
+        except Exception as e:
+            raise ChatError(format_qdrant_error(e)) from e
 
-        # Step 3: Fetch KB items from SQLite
         source_items = []
         for kb_id, score in search_results:
             item = kb_repo.get_by_id(kb_id)
             if item:
                 source_items.append((item, score))
 
-        # Step 4: Build context pack
-        context_pack = self._build_context_pack(source_items)
+        context_pack = self._build_context_pack(source_items, MAX_CONTEXT_TOKENS)
 
-        # Step 5: Call OpenAI
-        response = self.client.responses.create(
-            model=self.model,
-            instructions=ASSISTANT_SYSTEM_PROMPT,
-            input=f"## Question\n\n{question}\n\n## Context\n\n{context_pack}",
-            reasoning={"effort": reasoning_effort},
-        )
+        try:
+            response = self.client.responses.create(
+                model=self.model,
+                instructions=ASSISTANT_SYSTEM_PROMPT,
+                input=f"## Question\n\n{question}\n\n## Context\n\n{context_pack}",
+                reasoning={"effort": reasoning_effort},
+            )
+        except Exception as e:
+            raise ChatError(format_openai_error(e)) from e
 
         return ChatResult(
             answer=response.output_text,
@@ -107,12 +106,17 @@ class ChatService:
         )
 
     @staticmethod
-    def _build_context_pack(source_items: list[tuple[KBItem, float]]) -> str:
-        """Build context pack from retrieved KB items per PLAN.md section 10.2."""
+    def _build_context_pack(
+        source_items: list[tuple[KBItem, float]],
+        max_tokens: int = MAX_CONTEXT_TOKENS,
+    ) -> str:
+        """Build context pack from retrieved KB items with token budget."""
         if not source_items:
             return "No relevant knowledge items found."
 
         sections = []
+        total_tokens = 0
+
         for i, (item, score) in enumerate(source_items, 1):
             tags = json.loads(item.tags_json)
             sap_objects = json.loads(item.sap_objects_json)
@@ -124,9 +128,24 @@ class ChatService:
                 f"Score: {score:.3f} | ID: {item.kb_id}\n\n"
                 f"{item.content_markdown}"
             )
+
+            section_tokens = count_tokens(section)
+            if total_tokens + section_tokens > max_tokens:
+                remaining = max_tokens - total_tokens
+                if remaining > 100:
+                    section = truncate_to_token_limit(section, remaining)
+                    sections.append(section)
+                break
+
             sections.append(section)
+            total_tokens += section_tokens
 
         return "\n\n---\n\n".join(sections)
+
+
+class ChatError(Exception):
+    """Chat error with actionable user message."""
+    pass
 
 
 class ChatResult:

@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% set active_tab = "ingest" %}
+{% block content %}
+<div x-data="ingestApp()" class="max-w-4xl mx-auto space-y-6">
+
+  <!-- Scope and type selection -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <h2 class="text-lg font-semibold text-gray-800 mb-4">Knowledge Ingestion</h2>
+    <div class="grid grid-cols-2 gap-6">
+      <div>
+        <label class="text-sm font-medium text-gray-700 block mb-2">Scope</label>
+        <div class="flex gap-4">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" x-model="scope" value="standard" class="text-sap-600">
+            <span class="text-sm">Standard KB</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" x-model="scope" value="client" class="text-sap-600">
+            <span class="text-sm">Client KB</span>
+          </label>
+        </div>
+      </div>
+      <div>
+        <label class="text-sm font-medium text-gray-700 block mb-2">Input Type</label>
+        <div class="flex gap-4">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" x-model="inputType" value="text" class="text-sap-600">
+            <span class="text-sm">Text</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" x-model="inputType" value="file" class="text-sap-600">
+            <span class="text-sm">PDF / DOCX</span>
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Text input -->
+  <div x-show="inputType === 'text'" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <label class="text-sm font-medium text-gray-700 block mb-2">Paste SAP knowledge content</label>
+    <textarea x-model="text" rows="12" placeholder="Paste incident notes, resolution steps, runbook content..."
+              class="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm font-mono focus:ring-2 focus:ring-sap-500"></textarea>
+  </div>
+
+  <!-- File upload -->
+  <div x-show="inputType === 'file'" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <label class="text-sm font-medium text-gray-700 block mb-2">Upload PDF or DOCX file</label>
+    <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-sap-500 transition cursor-pointer"
+         @click="$refs.fileInput.click()"
+         @dragover.prevent="dragover = true"
+         @dragleave="dragover = false"
+         @drop.prevent="handleDrop($event)"
+         :class="dragover ? 'border-sap-500 bg-sap-50' : ''">
+      <input type="file" x-ref="fileInput" @change="handleFile($event)" accept=".pdf,.docx,.doc" class="hidden">
+      <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+      </svg>
+      <p class="text-sm text-gray-500" x-text="fileName || 'Click or drop a file here'"></p>
+    </div>
+  </div>
+
+  <!-- Submit -->
+  <div class="flex items-center gap-4">
+    <button @click="submit()" :disabled="processing"
+            class="bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition">
+      <span x-show="!processing">Ingest & Synthesize</span>
+      <span x-show="processing" class="flex items-center gap-2">
+        <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>
+        Processing...
+      </span>
+    </button>
+    <span x-show="statusMsg" class="text-sm" :class="statusType === 'error' ? 'text-red-600' : 'text-green-600'" x-text="statusMsg"></span>
+  </div>
+
+  <!-- Result -->
+  <div x-show="result" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <h3 class="text-sm font-semibold text-gray-700 mb-2">Result</h3>
+    <p class="text-sm text-gray-600" x-text="result"></p>
+  </div>
+</div>
+
+<script>
+function ingestApp() {
+  return {
+    scope: 'standard',
+    inputType: 'text',
+    text: '',
+    file: null,
+    fileName: '',
+    dragover: false,
+    processing: false,
+    statusMsg: '',
+    statusType: 'success',
+    result: '',
+
+    handleFile(e) { this.file = e.target.files[0]; this.fileName = this.file?.name || ''; },
+    handleDrop(e) {
+      this.dragover = false;
+      this.file = e.dataTransfer.files[0];
+      this.fileName = this.file?.name || '';
+    },
+
+    async submit() {
+      this.processing = true;
+      this.statusMsg = '';
+      this.result = '';
+      let ingestionId = null;
+
+      try {
+        if (this.inputType === 'text') {
+          if (!this.text.trim()) { this.statusMsg = 'Text is empty.'; this.statusType = 'error'; this.processing = false; return; }
+          const resp = await fetch('/api/ingest/text', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({text: this.text, scope: this.scope}),
+          });
+          const data = await resp.json();
+          if (!resp.ok) { this.statusMsg = data.error; this.statusType = 'error'; this.processing = false; return; }
+          ingestionId = data.ingestion_id;
+        } else {
+          if (!this.file) { this.statusMsg = 'Select a file first.'; this.statusType = 'error'; this.processing = false; return; }
+          const formData = new FormData();
+          formData.append('file', this.file);
+          formData.append('scope', this.scope);
+          const resp = await fetch('/api/ingest/file', {method: 'POST', body: formData});
+          const data = await resp.json();
+          if (!resp.ok) { this.statusMsg = data.error; this.statusType = 'error'; this.processing = false; return; }
+          ingestionId = data.ingestion_id;
+        }
+
+        // Poll for completion
+        this.statusMsg = 'Synthesizing with AI...';
+        this.statusType = 'success';
+        while (true) {
+          await new Promise(r => setTimeout(r, 2000));
+          const resp = await fetch('/api/ingest/' + ingestionId + '/status');
+          const status = await resp.json();
+          if (status.status === 'completed') {
+            this.result = 'Synthesis complete. ' + status.items_count + ' KB items created as DRAFT. Go to Review to approve them.';
+            this.statusMsg = 'Done!';
+            break;
+          } else if (status.status === 'failed') {
+            this.statusMsg = status.error || 'Synthesis failed.';
+            this.statusType = 'error';
+            break;
+          }
+        }
+      } catch(e) {
+        this.statusMsg = 'Error: ' + e.message;
+        this.statusType = 'error';
+      }
+      this.processing = false;
+    },
+  }
+}
+</script>
+{% endblock %}
