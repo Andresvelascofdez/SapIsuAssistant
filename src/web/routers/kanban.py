@@ -11,7 +11,15 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _get_global_repo(state):
+    """Return a KanbanRepository for the global columns database (always available)."""
+    from src.kanban.storage.kanban_repository import KanbanRepository
+    db_path = state.data_root / "kanban_global.sqlite"
+    return KanbanRepository(db_path, seed_columns=True)
+
+
 def _get_kanban_repo(state):
+    """Return a per-client KanbanRepository (tickets only, no column seeding)."""
     from src.kanban.storage.kanban_repository import KanbanRepository
     code = state.active_client_code
     if not code:
@@ -19,7 +27,7 @@ def _get_kanban_repo(state):
     db_path = state.data_root / "clients" / code / "kanban.sqlite"
     if not db_path.parent.exists():
         return None
-    return KanbanRepository(db_path)
+    return KanbanRepository(db_path, seed_columns=False)
 
 
 def _get_all_repos(state):
@@ -32,7 +40,7 @@ def _get_all_repos(state):
         if child.is_dir():
             db_path = child / "kanban.sqlite"
             if db_path.exists():
-                repos.append((child.name, KanbanRepository(db_path)))
+                repos.append((child.name, KanbanRepository(db_path, seed_columns=False)))
     return repos
 
 
@@ -93,10 +101,16 @@ async def create_ticket(request: Request):
     if not title:
         return JSONResponse({"error": "Title is required."}, status_code=400)
 
+    # Get default status from global columns
+    global_repo = _get_global_repo(state)
+    columns = global_repo.list_columns()
+    default_status = columns[0].name if columns else "EN_PROGRESO"
+
     ticket = repo.create_ticket(
         title=title,
         priority=body.get("priority", "MEDIUM"),
         notes=body.get("notes") or None,
+        status=body.get("status", default_status),
     )
     return _ticket_to_dict(ticket)
 
@@ -156,24 +170,20 @@ async def ticket_history(ticket_id: str, request: Request):
     ]
 
 
-# ── Column management endpoints ──
+# ── Column management endpoints (global, no client required) ──
 
 
 @router.get("/api/kanban/columns")
 async def list_columns(request: Request):
     state = get_state(request)
-    repo = _get_kanban_repo(state)
-    if not repo:
-        return []
+    repo = _get_global_repo(state)
     return [_column_to_dict(c) for c in repo.list_columns()]
 
 
 @router.post("/api/kanban/columns")
 async def create_column(request: Request):
     state = get_state(request)
-    repo = _get_kanban_repo(state)
-    if not repo:
-        return JSONResponse({"error": "No client selected."}, status_code=400)
+    repo = _get_global_repo(state)
 
     body = await request.json()
     name = body.get("name", "").strip().upper().replace(" ", "_")
@@ -191,9 +201,7 @@ async def create_column(request: Request):
 @router.put("/api/kanban/columns/reorder")
 async def reorder_columns(request: Request):
     state = get_state(request)
-    repo = _get_kanban_repo(state)
-    if not repo:
-        return JSONResponse({"error": "No client selected."}, status_code=400)
+    repo = _get_global_repo(state)
 
     body = await request.json()
     ordered_ids = body.get("ordered_ids", [])
@@ -207,9 +215,7 @@ async def reorder_columns(request: Request):
 @router.put("/api/kanban/columns/{col_id}")
 async def rename_column(col_id: int, request: Request):
     state = get_state(request)
-    repo = _get_kanban_repo(state)
-    if not repo:
-        return JSONResponse({"error": "No client selected."}, status_code=400)
+    repo = _get_global_repo(state)
 
     body = await request.json()
     display_name = body.get("display_name", "").strip()
@@ -225,15 +231,52 @@ async def rename_column(col_id: int, request: Request):
 @router.delete("/api/kanban/columns/{col_id}")
 async def delete_column(col_id: int, request: Request):
     state = get_state(request)
-    repo = _get_kanban_repo(state)
-    if not repo:
-        return JSONResponse({"error": "No client selected."}, status_code=400)
+    repo = _get_global_repo(state)
+
+    # Find the column to check for tickets across all clients
+    cols = repo.list_columns()
+    target_col = next((c for c in cols if c.id == col_id), None)
+    if not target_col:
+        return JSONResponse({"error": "Column not found."}, status_code=404)
+
+    # Check all client repos for tickets in this column
+    total_ticket_count = 0
+    for _code, client_repo in _get_all_repos(state):
+        total_ticket_count += len(client_repo.list_tickets(status=target_col.name))
+
+    if total_ticket_count > 0:
+        return JSONResponse(
+            {"error": f"Column '{target_col.display_name}' has {total_ticket_count} ticket(s). Move them first."},
+            status_code=400,
+        )
+
+    repo.delete_column(col_id)
+    return {"status": "deleted"}
+
+
+# ── CSV import endpoint ──
+
+
+@router.post("/api/kanban/import-csv")
+async def import_csv(request: Request):
+    """Import tickets from a CSV file."""
+    state = get_state(request)
+    body = await request.json()
+    csv_path = body.get("csv_path", "").strip()
+    if not csv_path:
+        return JSONResponse({"error": "csv_path is required."}, status_code=400)
+
+    from pathlib import Path
+    from src.kanban.storage.csv_import import import_tickets_from_csv
+
+    csv_file = Path(csv_path)
+    if not csv_file.exists():
+        return JSONResponse({"error": f"File not found: {csv_path}"}, status_code=400)
 
     try:
-        deleted = repo.delete_column(col_id)
-    except ValueError as e:
-        return JSONResponse({"error": str(e)}, status_code=400)
+        result = import_tickets_from_csv(csv_file, state.data_root)
+    except Exception as e:
+        log.exception("CSV import failed")
+        return JSONResponse({"error": str(e)}, status_code=500)
 
-    if not deleted:
-        return JSONResponse({"error": "Column not found."}, status_code=404)
-    return {"status": "deleted"}
+    return result

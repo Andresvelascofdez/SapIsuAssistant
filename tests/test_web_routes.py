@@ -203,7 +203,7 @@ class TestKanbanAPI:
         data = resp.json()
         assert data["title"] == "Fix IDEX issue"
         assert data["priority"] == "HIGH"
-        assert data["status"] == "OPEN"
+        assert data["status"] == "EN_PROGRESO"
         assert data["notes"] == "Check SAP note 12345"
 
     def test_create_ticket_empty_title(self, client):
@@ -223,13 +223,13 @@ class TestKanbanAPI:
         created = client.post("/api/kanban/tickets", json={"title": "Move me"}).json()
         tid = created["id"]
 
-        resp = client.put(f"/api/kanban/tickets/{tid}/move", json={"status": "IN_PROGRESS"})
+        resp = client.put(f"/api/kanban/tickets/{tid}/move", json={"status": "ANALIZADO"})
         assert resp.status_code == 200
-        assert resp.json()["status"] == "IN_PROGRESS"
+        assert resp.json()["status"] == "ANALIZADO"
 
     def test_move_ticket_not_found(self, client):
         self._register_and_select(client)
-        resp = client.put("/api/kanban/tickets/NONEXIST/move", json={"status": "DONE"})
+        resp = client.put("/api/kanban/tickets/NONEXIST/move", json={"status": "CERRADO"})
         assert resp.status_code == 404
 
     def test_move_ticket_empty_status(self, client):
@@ -263,16 +263,16 @@ class TestKanbanAPI:
         created = client.post("/api/kanban/tickets", json={"title": "History test"}).json()
         tid = created["id"]
 
-        client.put(f"/api/kanban/tickets/{tid}/move", json={"status": "IN_PROGRESS"})
-        client.put(f"/api/kanban/tickets/{tid}/move", json={"status": "DONE"})
+        client.put(f"/api/kanban/tickets/{tid}/move", json={"status": "ANALIZADO"})
+        client.put(f"/api/kanban/tickets/{tid}/move", json={"status": "CERRADO"})
 
         resp = client.get(f"/api/kanban/tickets/{tid}/history")
         assert resp.status_code == 200
         history = resp.json()
         assert len(history) >= 2
         statuses = [h["to_status"] for h in history]
-        assert "IN_PROGRESS" in statuses
-        assert "DONE" in statuses
+        assert "ANALIZADO" in statuses
+        assert "CERRADO" in statuses
 
 
 # ───────── Kanban Columns API ─────────
@@ -280,47 +280,51 @@ class TestKanbanAPI:
 
 class TestKanbanColumnsAPI:
     def _register_and_select(self, client):
-        """Helper: register a client and set it as active."""
+        """Helper: register a client and set it as active (needed for ticket operations)."""
         client.post("/api/settings/client", json={"code": "COL", "name": "Column Test"})
         client.post("/api/session/client", json={"code": "COL"})
 
     def test_list_columns_no_client(self, client):
+        """Columns are global - should return defaults even without a client."""
         resp = client.get("/api/kanban/columns")
         assert resp.status_code == 200
-        assert resp.json() == []
+        data = resp.json()
+        assert len(data) == 7
 
     def test_list_columns_defaults(self, client):
-        self._register_and_select(client)
         resp = client.get("/api/kanban/columns")
         assert resp.status_code == 200
         data = resp.json()
-        assert len(data) == 4
-        assert data[0]["name"] == "OPEN"
-        assert data[1]["name"] == "IN_PROGRESS"
-        assert data[2]["name"] == "WAITING"
-        assert data[3]["name"] == "DONE"
+        assert len(data) == 7
+        assert data[0]["name"] == "EN_PROGRESO"
+        assert data[1]["name"] == "MAS_INFO"
+        assert data[2]["name"] == "ANALIZADO"
+        assert data[3]["name"] == "ANALIZADO_PENDIENTE_RESPUESTA"
+        assert data[4]["name"] == "PENDIENTE_DE_TRANSPORTE"
+        assert data[5]["name"] == "TESTING"
+        assert data[6]["name"] == "CERRADO"
 
     def test_create_column(self, client):
-        self._register_and_select(client)
         resp = client.post("/api/kanban/columns", json={
-            "name": "TESTING",
-            "display_name": "Testing",
+            "name": "CUSTOM",
+            "display_name": "Custom",
         })
         assert resp.status_code == 200
         data = resp.json()
-        assert data["name"] == "TESTING"
-        assert data["display_name"] == "Testing"
-        assert data["position"] == 4
+        assert data["name"] == "CUSTOM"
+        assert data["display_name"] == "Custom"
+        assert data["position"] == 7
 
-    def test_create_column_no_client(self, client):
+    def test_create_column_without_client_succeeds(self, client):
+        """Columns are global - creation works without a client selected."""
         resp = client.post("/api/kanban/columns", json={
-            "name": "X",
-            "display_name": "X",
+            "name": "NOAUTH",
+            "display_name": "No auth needed",
         })
-        assert resp.status_code == 400
+        assert resp.status_code == 200
+        assert resp.json()["name"] == "NOAUTH"
 
     def test_create_column_empty_name(self, client):
-        self._register_and_select(client)
         resp = client.post("/api/kanban/columns", json={
             "name": "",
             "display_name": "Test",
@@ -328,7 +332,6 @@ class TestKanbanColumnsAPI:
         assert resp.status_code == 400
 
     def test_rename_column(self, client):
-        self._register_and_select(client)
         cols = client.get("/api/kanban/columns").json()
         col_id = cols[0]["id"]
 
@@ -339,14 +342,12 @@ class TestKanbanColumnsAPI:
         assert resp.json()["display_name"] == "Abierto"
 
     def test_rename_column_not_found(self, client):
-        self._register_and_select(client)
         resp = client.put("/api/kanban/columns/9999", json={
             "display_name": "Ghost",
         })
         assert resp.status_code == 404
 
     def test_rename_column_empty_name(self, client):
-        self._register_and_select(client)
         cols = client.get("/api/kanban/columns").json()
         col_id = cols[0]["id"]
         resp = client.put(f"/api/kanban/columns/{col_id}", json={
@@ -355,7 +356,6 @@ class TestKanbanColumnsAPI:
         assert resp.status_code == 400
 
     def test_delete_column(self, client):
-        self._register_and_select(client)
         # Create a new column to delete (no tickets)
         created = client.post("/api/kanban/columns", json={
             "name": "TEMP",
@@ -373,23 +373,21 @@ class TestKanbanColumnsAPI:
 
     def test_delete_column_with_tickets(self, client):
         self._register_and_select(client)
-        # Create a ticket in OPEN column
+        # Create a ticket in EN_PROGRESO column
         client.post("/api/kanban/tickets", json={"title": "Blocker"})
 
         cols = client.get("/api/kanban/columns").json()
-        open_col = next(c for c in cols if c["name"] == "OPEN")
+        ep_col = next(c for c in cols if c["name"] == "EN_PROGRESO")
 
-        resp = client.delete(f"/api/kanban/columns/{open_col['id']}")
+        resp = client.delete(f"/api/kanban/columns/{ep_col['id']}")
         assert resp.status_code == 400
         assert "ticket" in resp.json()["error"].lower()
 
     def test_delete_column_not_found(self, client):
-        self._register_and_select(client)
         resp = client.delete("/api/kanban/columns/9999")
         assert resp.status_code == 404
 
     def test_reorder_columns(self, client):
-        self._register_and_select(client)
         cols = client.get("/api/kanban/columns").json()
         # Reverse order
         reversed_ids = [c["id"] for c in reversed(cols)]
@@ -399,17 +397,19 @@ class TestKanbanColumnsAPI:
         })
         assert resp.status_code == 200
         data = resp.json()
-        assert data[0]["name"] == "DONE"
-        assert data[-1]["name"] == "OPEN"
+        assert data[0]["name"] == "CERRADO"
+        assert data[-1]["name"] == "EN_PROGRESO"
 
-    def test_reorder_columns_no_client(self, client):
+    def test_reorder_columns_without_client_succeeds(self, client):
+        """Columns are global - reorder works without a client selected."""
+        cols = client.get("/api/kanban/columns").json()
+        ids = [c["id"] for c in cols]
         resp = client.put("/api/kanban/columns/reorder", json={
-            "ordered_ids": [1, 2, 3],
+            "ordered_ids": ids,
         })
-        assert resp.status_code == 400
+        assert resp.status_code == 200
 
     def test_reorder_columns_empty(self, client):
-        self._register_and_select(client)
         resp = client.put("/api/kanban/columns/reorder", json={
             "ordered_ids": [],
         })

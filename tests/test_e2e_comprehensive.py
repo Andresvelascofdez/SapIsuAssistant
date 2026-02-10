@@ -710,34 +710,34 @@ class TestKanbanFullCRUD:
         )
 
         assert ticket.title == "Fix IDEX timeout"
-        assert ticket.status == TicketStatus.OPEN
+        assert ticket.status == TicketStatus.EN_PROGRESO
         assert ticket.priority == TicketPriority.HIGH
         assert ticket.notes == "Critical issue affecting meter reading"
 
     def test_full_ticket_lifecycle(self, kanban_swe):
-        """OPEN -> IN_PROGRESS -> WAITING -> IN_PROGRESS -> DONE."""
+        """EN_PROGRESO -> ANALIZADO -> TESTING -> ANALIZADO -> CERRADO."""
         ticket = kanban_swe.create_ticket(title="IDEX Fix", priority=TicketPriority.HIGH)
-        assert ticket.status == TicketStatus.OPEN
+        assert ticket.status == TicketStatus.EN_PROGRESO
 
-        ticket = kanban_swe.update_status(ticket.id, TicketStatus.IN_PROGRESS)
-        assert ticket.status == TicketStatus.IN_PROGRESS
+        ticket = kanban_swe.update_status(ticket.id, TicketStatus.ANALIZADO)
+        assert ticket.status == TicketStatus.ANALIZADO
 
-        ticket = kanban_swe.update_status(ticket.id, TicketStatus.WAITING)
-        assert ticket.status == TicketStatus.WAITING
+        ticket = kanban_swe.update_status(ticket.id, TicketStatus.TESTING)
+        assert ticket.status == TicketStatus.TESTING
 
-        ticket = kanban_swe.update_status(ticket.id, TicketStatus.IN_PROGRESS)
-        assert ticket.status == TicketStatus.IN_PROGRESS
+        ticket = kanban_swe.update_status(ticket.id, TicketStatus.ANALIZADO)
+        assert ticket.status == TicketStatus.ANALIZADO
 
-        ticket = kanban_swe.update_status(ticket.id, TicketStatus.DONE)
-        assert ticket.status == TicketStatus.DONE
+        ticket = kanban_swe.update_status(ticket.id, TicketStatus.CERRADO)
+        assert ticket.status == TicketStatus.CERRADO
         assert ticket.closed_at is not None
 
         # Verify history
         history = kanban_swe.get_history(ticket.id)
         assert len(history) == 5  # create + 4 transitions
         assert history[0].from_status is None
-        assert history[0].to_status == TicketStatus.OPEN
-        assert history[-1].to_status == TicketStatus.DONE
+        assert history[0].to_status == TicketStatus.EN_PROGRESO
+        assert history[-1].to_status == TicketStatus.CERRADO
 
     def test_update_ticket_fields(self, kanban_swe):
         ticket = kanban_swe.create_ticket(title="Original Title")
@@ -756,11 +756,11 @@ class TestKanbanFullCRUD:
     def test_list_and_filter_tickets(self, kanban_swe):
         kanban_swe.create_ticket(title="T1")
         t2 = kanban_swe.create_ticket(title="T2")
-        kanban_swe.update_status(t2.id, TicketStatus.IN_PROGRESS)
+        kanban_swe.update_status(t2.id, TicketStatus.ANALIZADO)
 
         all_tickets = kanban_swe.list_tickets()
-        open_tickets = kanban_swe.list_tickets(status=TicketStatus.OPEN)
-        ip_tickets = kanban_swe.list_tickets(status=TicketStatus.IN_PROGRESS)
+        open_tickets = kanban_swe.list_tickets(status=TicketStatus.EN_PROGRESO)
+        ip_tickets = kanban_swe.list_tickets(status=TicketStatus.ANALIZADO)
 
         assert len(all_tickets) == 2
         assert len(open_tickets) == 1
