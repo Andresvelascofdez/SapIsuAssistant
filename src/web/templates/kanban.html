@@ -24,21 +24,32 @@
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'">
       <span x-text="hideClosed ? 'Cerrados ocultos (' + ticketsByCol('CERRADO').length + ')' : 'Ocultar cerrados'"></span>
     </button>
-    <span class="text-sm text-gray-500 dark:text-gray-400" x-text="statusText"></span>
+    <div class="relative">
+      <input x-model="searchQuery" placeholder="Buscar por ID..."
+             class="border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 w-48 placeholder-gray-400"
+             @keydown.escape="searchQuery = ''">
+      <button x-show="searchQuery" @click="searchQuery = ''" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <span class="text-sm text-gray-500 dark:text-gray-400" x-text="activeTicketCount + ' tickets activos'"></span>
   </div>
 
   <!-- Board columns (draggable) -->
   <div class="flex gap-4 h-[calc(100%-4rem)] overflow-x-auto pb-2" id="columns-container" x-init="initColumnSortable()">
     <template x-for="col in visibleColumns()" :key="col.id">
-      <div class="flex flex-col bg-gray-100 dark:bg-gray-800 rounded-xl min-w-[280px] w-[280px] flex-shrink-0" :data-col-id="col.id">
+      <div class="flex flex-col rounded-xl min-w-[280px] w-[280px] flex-shrink-0 border-t-4"
+           :class="colStyle(col.name).border"
+           :data-col-id="col.id">
         <!-- Column header -->
-        <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between cursor-grab group">
+        <div class="px-4 py-3 border-b flex items-center justify-between cursor-grab group"
+             :class="colStyle(col.name).header">
           <div class="flex-1 min-w-0">
             <template x-if="editingCol !== col.id">
               <div>
-                <h3 class="text-sm font-bold text-gray-700 dark:text-gray-200 truncate" x-text="col.display_name"
+                <h3 class="text-sm font-bold truncate" :class="colStyle(col.name).title" x-text="col.display_name"
                     @dblclick="startEditCol(col)"></h3>
-                <span class="text-xs text-gray-400 dark:text-gray-500" x-text="ticketsByCol(col.name).length + ' tickets'"></span>
+                <span class="text-xs opacity-70" :class="colStyle(col.name).title" x-text="ticketsByCol(col.name).length + ' tickets'"></span>
               </div>
             </template>
             <template x-if="editingCol === col.id">
@@ -56,11 +67,11 @@
              :id="'col-' + col.name"
              x-init="initSortable($el, col.name)">
           <template x-for="ticket in ticketsByCol(col.name)" :key="ticket.id">
-            <div class="bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-3 cursor-grab active:cursor-grabbing"
+            <div class="bg-white dark:bg-gray-700 rounded-lg shadow-sm border-2 border-green-400 dark:border-green-600 p-3 cursor-grab active:cursor-grabbing"
                  :data-id="ticket.id"
                  @click="selectTicket(ticket)">
               <div class="flex items-center justify-between mb-1">
-                <span x-show="ticket.ticket_id" class="text-xs font-mono text-gray-400 dark:text-gray-500 truncate" x-text="ticket.ticket_id"></span>
+                <span x-show="ticket.ticket_id" class="text-sm font-mono font-bold text-green-700 dark:text-green-400 truncate" x-text="ticket.ticket_id"></span>
                 <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
                       :class="{
                         'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300': ticket.priority === 'CRITICAL',
@@ -69,7 +80,7 @@
                         'bg-gray-100 text-gray-600 dark:bg-gray-600 dark:text-gray-300': ticket.priority === 'LOW',
                       }" x-text="ticket.priority"></span>
               </div>
-              <div class="text-sm font-medium text-gray-800 dark:text-gray-100" x-text="ticket.title"></div>
+              <div class="text-base font-bold text-gray-900 dark:text-white leading-snug" x-text="ticket.title"></div>
               <div x-show="ticket.notes" class="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate" x-text="ticket.notes"></div>
             </div>
           </template>
@@ -148,14 +159,38 @@ function kanbanApp() {
     editingCol: null,
     editingColName: '',
     hideClosed: false,
+    searchQuery: '',
+
+    get activeTicketCount() {
+      return this.tickets.filter(t => t.status !== 'CERRADO').length;
+    },
 
     visibleColumns() {
       if (this.hideClosed) return this.columns.filter(c => c.name !== 'CERRADO');
       return this.columns;
     },
 
+    colStyle(name) {
+      const styles = {
+        NO_ANALIZADO:                  { header: 'bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600',       border: 'border-gray-400 dark:border-gray-500 bg-gray-50 dark:bg-gray-800',       title: 'text-gray-700 dark:text-gray-200' },
+        EN_PROGRESO:                   { header: 'bg-blue-100 dark:bg-blue-900/50 border-blue-200 dark:border-blue-800',     border: 'border-blue-500 dark:border-blue-400 bg-blue-50/50 dark:bg-gray-800',    title: 'text-blue-800 dark:text-blue-200' },
+        MAS_INFO:                      { header: 'bg-yellow-100 dark:bg-yellow-900/50 border-yellow-200 dark:border-yellow-800', border: 'border-yellow-500 dark:border-yellow-400 bg-yellow-50/50 dark:bg-gray-800', title: 'text-yellow-800 dark:text-yellow-200' },
+        TESTING:                       { header: 'bg-purple-100 dark:bg-purple-900/50 border-purple-200 dark:border-purple-800', border: 'border-purple-500 dark:border-purple-400 bg-purple-50/50 dark:bg-gray-800', title: 'text-purple-800 dark:text-purple-200' },
+        PENDIENTE_DE_TRANSPORTE:       { header: 'bg-orange-100 dark:bg-orange-900/50 border-orange-200 dark:border-orange-800', border: 'border-orange-500 dark:border-orange-400 bg-orange-50/50 dark:bg-gray-800', title: 'text-orange-800 dark:text-orange-200' },
+        ANALIZADO_PENDIENTE_RESPUESTA: { header: 'bg-cyan-100 dark:bg-cyan-900/50 border-cyan-200 dark:border-cyan-800',    border: 'border-cyan-500 dark:border-cyan-400 bg-cyan-50/50 dark:bg-gray-800',    title: 'text-cyan-800 dark:text-cyan-200' },
+        ANALIZADO:                     { header: 'bg-green-100 dark:bg-green-900/50 border-green-200 dark:border-green-800', border: 'border-green-500 dark:border-green-400 bg-green-50/50 dark:bg-gray-800', title: 'text-green-800 dark:text-green-200' },
+        CERRADO:                       { header: 'bg-emerald-100 dark:bg-emerald-900/50 border-emerald-200 dark:border-emerald-800', border: 'border-emerald-500 dark:border-emerald-400 bg-emerald-50/50 dark:bg-gray-800', title: 'text-emerald-800 dark:text-emerald-200' },
+      };
+      return styles[name] || { header: 'bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700', border: 'border-gray-400 dark:border-gray-500 bg-gray-50 dark:bg-gray-800', title: 'text-gray-700 dark:text-gray-200' };
+    },
+
     ticketsByCol(colName) {
-      return this.tickets.filter(t => t.status === colName);
+      let filtered = this.tickets.filter(t => t.status === colName);
+      if (this.searchQuery.trim()) {
+        const q = this.searchQuery.trim().toLowerCase();
+        filtered = filtered.filter(t => (t.ticket_id || '').toLowerCase().includes(q));
+      }
+      return filtered;
     },
 
     async loadData() {
