@@ -102,7 +102,7 @@ See `PLAN.md` for detailed implementation plan.
 - [x] M1: Client manager + storage layout
 - [x] M2: Assistant SQLite repos (KB items + ingestions, dedupe, versioning)
 - [x] M3: Qdrant integration (collections, upsert, search)
-- [ ] M4: Document extraction
-- [ ] M5: OpenAI synthesis pipeline
-- [ ] M6: Assistant chat RAG
-- [ ] M7: Kanban module
+- [x] M4: Document extraction (Text, PDF, DOCX)
+- [x] M5: OpenAI synthesis pipeline (structured outputs, validation, retry)
+- [x] M6: Assistant chat RAG (embedding, retrieval, answer, traceability)
+- [x] M7: Kanban module (CRUD, history, independent DB)
