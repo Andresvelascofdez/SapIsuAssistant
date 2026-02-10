@@ -17,12 +17,19 @@
             class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition">
       Refresh
     </button>
+    <button @click="hideClosed = !hideClosed"
+            class="px-4 py-2 rounded-lg text-sm font-medium transition"
+            :class="hideClosed
+              ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200 dark:bg-yellow-900 dark:text-yellow-200 dark:hover:bg-yellow-800'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'">
+      <span x-text="hideClosed ? 'Cerrados ocultos (' + ticketsByCol('CERRADO').length + ')' : 'Ocultar cerrados'"></span>
+    </button>
     <span class="text-sm text-gray-500 dark:text-gray-400" x-text="statusText"></span>
   </div>
 
   <!-- Board columns (draggable) -->
   <div class="flex gap-4 h-[calc(100%-4rem)] overflow-x-auto pb-2" id="columns-container" x-init="initColumnSortable()">
-    <template x-for="col in columns" :key="col.id">
+    <template x-for="col in visibleColumns()" :key="col.id">
       <div class="flex flex-col bg-gray-100 dark:bg-gray-800 rounded-xl min-w-[280px] w-[280px] flex-shrink-0" :data-col-id="col.id">
         <!-- Column header -->
         <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between cursor-grab group">
@@ -53,6 +60,7 @@
                  :data-id="ticket.id"
                  @click="selectTicket(ticket)">
               <div class="flex items-center justify-between mb-1">
+                <span x-show="ticket.ticket_id" class="text-xs font-mono text-gray-400 dark:text-gray-500 truncate" x-text="ticket.ticket_id"></span>
                 <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
                       :class="{
                         'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300': ticket.priority === 'CRITICAL',
@@ -109,6 +117,7 @@
       <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Ticket Detail</h3>
       <template x-if="selectedTicket">
         <div class="space-y-3">
+          <div x-show="selectedTicket.ticket_id" class="text-xs font-mono text-gray-400 dark:text-gray-500" x-text="selectedTicket.ticket_id"></div>
           <input x-model="selectedTicket.title" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
           <select x-model="selectedTicket.priority" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
             <option value="LOW">Low</option><option value="MEDIUM">Medium</option>
@@ -138,6 +147,12 @@ function kanbanApp() {
     newColName: '',
     editingCol: null,
     editingColName: '',
+    hideClosed: false,
+
+    visibleColumns() {
+      if (this.hideClosed) return this.columns.filter(c => c.name !== 'CERRADO');
+      return this.columns;
+    },
 
     ticketsByCol(colName) {
       return this.tickets.filter(t => t.status === colName);
