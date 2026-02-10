@@ -129,7 +129,7 @@ class SynthesisPipeline:
                     instructions=SYNTHESIS_SYSTEM_PROMPT,
                     input=f"Analyze and synthesize the following content:\n\n{extracted_text}",
                     text={"format": {"type": "json_schema", "name": "kb_synthesis", "schema": SYNTHESIS_SCHEMA}},
-                    reasoning={"effort": "high"},
+                    reasoning={"effort": "xhigh"},
                 )
 
                 raw_text = response.output_text
