@@ -12,10 +12,13 @@ from typing import Optional
 
 
 DEFAULT_COLUMNS = [
-    {"name": "OPEN", "display_name": "Open", "position": 0},
-    {"name": "IN_PROGRESS", "display_name": "In Progress", "position": 1},
-    {"name": "WAITING", "display_name": "Waiting", "position": 2},
-    {"name": "DONE", "display_name": "Done", "position": 3},
+    {"name": "EN_PROGRESO", "display_name": "En progreso", "position": 0},
+    {"name": "MAS_INFO", "display_name": "Mas info", "position": 1},
+    {"name": "ANALIZADO", "display_name": "Analizado", "position": 2},
+    {"name": "ANALIZADO_PENDIENTE_RESPUESTA", "display_name": "Analizado- Pendiente respuesta", "position": 3},
+    {"name": "PENDIENTE_DE_TRANSPORTE", "display_name": "Pendiente de transporte", "position": 4},
+    {"name": "TESTING", "display_name": "Testing", "position": 5},
+    {"name": "CERRADO", "display_name": "Cerrado", "position": 6},
 ]
 
 
@@ -30,11 +33,13 @@ class KanbanColumn:
 
 class TicketStatus:
     """Status constants matching default column names."""
-    OPEN = "OPEN"
-    IN_PROGRESS = "IN_PROGRESS"
-    WAITING = "WAITING"
-    DONE = "DONE"
-    CLOSED = "CLOSED"
+    EN_PROGRESO = "EN_PROGRESO"
+    MAS_INFO = "MAS_INFO"
+    ANALIZADO = "ANALIZADO"
+    ANALIZADO_PENDIENTE_RESPUESTA = "ANALIZADO_PENDIENTE_RESPUESTA"
+    PENDIENTE_DE_TRANSPORTE = "PENDIENTE_DE_TRANSPORTE"
+    TESTING = "TESTING"
+    CERRADO = "CERRADO"
 
 
 class TicketPriority:
@@ -77,8 +82,9 @@ class KanbanRepository:
     Must use its own database and never query assistant DB per PLAN.md section 15.
     """
 
-    def __init__(self, db_path: Path):
+    def __init__(self, db_path: Path, seed_columns: bool = True):
         self.db_path = Path(db_path)
+        self._seed_columns = seed_columns
         self._init_schema()
 
     def _init_schema(self):
@@ -127,15 +133,16 @@ class KanbanRepository:
                 ON ticket_history(ticket_id)
             """)
 
-            # Seed default columns if none exist
-            count = conn.execute("SELECT COUNT(*) FROM kanban_columns").fetchone()[0]
-            if count == 0:
-                now = datetime.now(UTC).isoformat()
-                for col in DEFAULT_COLUMNS:
-                    conn.execute(
-                        "INSERT INTO kanban_columns (name, display_name, position, created_at) VALUES (?, ?, ?, ?)",
-                        (col["name"], col["display_name"], col["position"], now),
-                    )
+            # Seed default columns only if requested (global DB)
+            if self._seed_columns:
+                count = conn.execute("SELECT COUNT(*) FROM kanban_columns").fetchone()[0]
+                if count == 0:
+                    now = datetime.now(UTC).isoformat()
+                    for col in DEFAULT_COLUMNS:
+                        conn.execute(
+                            "INSERT INTO kanban_columns (name, display_name, position, created_at) VALUES (?, ?, ?, ?)",
+                            (col["name"], col["display_name"], col["position"], now),
+                        )
 
             conn.commit()
 
@@ -147,13 +154,13 @@ class KanbanRepository:
         notes: str | None = None,
         links: list[str] | None = None,
         tags: list[str] | None = None,
+        status: str = "EN_PROGRESO",
     ) -> Ticket:
         """Create a new ticket."""
         import json
 
         internal_id = str(uuid.uuid4())
         now = datetime.now(UTC).isoformat()
-        status = "OPEN"
 
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
@@ -211,7 +218,7 @@ class KanbanRepository:
 
             old_status = row[0]
 
-            closed_at = now if new_status in ("DONE", "CLOSED") else None
+            closed_at = now if new_status in ("DONE", "CLOSED", "CERRADO") else None
 
             conn.execute(
                 "UPDATE tickets SET status = ?, updated_at = ?, closed_at = COALESCE(?, closed_at) WHERE id = ?",
