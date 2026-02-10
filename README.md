@@ -1,37 +1,48 @@
 # SAP IS-U Assistant + Kanban
 
-A web application providing AI-powered knowledge management and operational tracking for SAP IS-U systems.
+Aplicacion web para gestion de conocimiento SAP IS-U con IA y seguimiento operativo mediante tablero Kanban.
 
-## Features
+## Funcionalidades
 
-- **Assistant Module**: AI-powered knowledge base with RAG (Retrieval Augmented Generation)
-  - Ingest knowledge from text, PDF, DOCX
-  - Structured synthesis using OpenAI GPT-5.2
-  - Client-isolated knowledge bases
-  - Vector search via Qdrant
-  - SSE-based streaming chat responses
+### Kanban Board
+- Tablero drag-and-drop con 8 columnas de estado (No analizado, En progreso, Mas info, Testing, Pendiente de transporte, Analizado - Pendiente respuesta, Analizado, Cerrado)
+- Columnas con codigo de colores por estado
+- Tickets con ID, titulo, prioridad y notas
+- Buscador por ID de ticket
+- Toggle para ocultar tickets cerrados (sin borrarlos)
+- Columnas personalizables: crear, renombrar, reordenar, eliminar
+- Importacion masiva desde CSV
+- Datos aislados por cliente
 
-- **Kanban Module**: Operational ticket tracking
-  - Drag-and-drop board (SortableJS)
-  - Status, priority, notes, tags
-  - Ticket history tracking
-  - Independent from assistant knowledge base
-  - Client-isolated boards
+### Assistant (RAG)
+- Base de conocimiento con IA (Retrieval Augmented Generation)
+- Ingesta de texto, PDF y DOCX
+- Sintesis estructurada via OpenAI GPT
+- Chat con streaming SSE y trazabilidad de fuentes
+- Knowledge base aislada por cliente + base estandar compartida
 
-- **Review Module**: KB item approval workflow
-  - Edit title, content, tags, SAP objects before approval
-  - Approve + auto-index in Qdrant
-  - Reject with status tracking
+### Review
+- Workflow de aprobacion de items de conocimiento
+- Edicion de titulo, contenido, tags y objetos SAP antes de aprobar
+- Aprobacion con indexado automatico en Qdrant
+- Rechazo con tracking de estado
 
-## Tech Stack
+### Settings
+- Registro y gestion de clientes
+- Configuracion de Qdrant URL
+- Configuracion de API key de OpenAI
+- Selector de cliente activo y toggle de KB estandar (barra superior)
+- Modo oscuro
 
-- Python 3.11+
-- FastAPI + Uvicorn (Web backend)
-- Jinja2 + Tailwind CSS + Alpine.js (Frontend)
-- SortableJS (Kanban drag-and-drop)
-- SQLite (Local metadata)
-- Qdrant (Vector DB, Docker)
-- OpenAI API (GPT-5.2 + text-embedding-3-large)
+## Stack
+
+| Capa | Tecnologia |
+|------|-----------|
+| Backend | Python 3.11+, FastAPI, Uvicorn |
+| Frontend | Jinja2, Tailwind CSS, Alpine.js, SortableJS |
+| Datos | SQLite (metadatos), Qdrant (vectores) |
+| IA | OpenAI API (GPT + text-embedding-3-large) |
+| Infra | Docker (Qdrant) |
 
 ## Quick Start
 
@@ -39,118 +50,149 @@ A web application providing AI-powered knowledge management and operational trac
 python run.py
 ```
 
-This will check dependencies, start Qdrant via Docker, launch the web server and open `http://localhost:8000` in your browser.
+El launcher verifica dependencias, arranca Qdrant via Docker, lanza el servidor web y abre `http://localhost:8000` en el navegador.
 
-## Setup
+## Instalacion
 
-### Prerequisites
-
-- Python 3.11 or higher
-- Docker Desktop (for Qdrant)
+### Requisitos
+- Python 3.11+
+- Docker Desktop (para Qdrant)
 - OpenAI API key
 
-### Installation
+### Pasos
 
-1. Clone the repository
-2. Install dependencies:
+1. Clonar el repositorio
 
+2. Instalar dependencias:
    ```bash
-   pip install -e ".[dev]"
+   pip install -e .
    ```
 
-3. Start Qdrant:
-
+3. Arrancar Qdrant:
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
-4. Set environment variables:
+4. Configurar API key (opcion A: variable de entorno):
    ```bash
-   export OPENAI_API_KEY=your_key_here
+   set OPENAI_API_KEY=sk-...
    ```
+   O bien configurarla desde la UI en Settings.
 
-5. Run the application:
+5. Ejecutar:
    ```bash
    python run.py
    ```
 
-   Or directly:
-   ```bash
-   python -m src
-   ```
-
-### Running Tests
-
-```bash
-pytest
-```
-
-## Project Structure
+## Estructura del proyecto
 
 ```
 src/
-  web/                # FastAPI web application
-    routers/          # API route handlers (chat, kanban, review, ingest, settings)
-    templates/        # Jinja2 HTML templates
-    static/           # CSS and static assets
-  assistant/          # AI knowledge base module
-    ingestion/        # Content extraction and synthesis
-    retrieval/        # Vector search and RAG
-    chat/             # Chat service
-    storage/          # SQLite repositories
-  kanban/             # Operational tracking module
-    storage/          # Kanban DB
-  shared/             # Common utilities (app state, client manager, logging, errors)
-tests/                # Test suite (224 tests)
-run.py                # Launcher script
+  web/                  # Aplicacion FastAPI
+    app.py              # Entry point, middlewares, routers
+    dependencies.py     # Inyeccion de dependencias (estado, sesion)
+    routers/
+      chat.py           # API de chat SSE
+      ingest.py         # API de ingesta (texto + archivos)
+      review.py         # API de revision/aprobacion KB
+      kanban.py         # API Kanban (tickets, columnas, CSV import)
+      settings.py       # API de configuracion (clientes, Qdrant, API key)
+    templates/
+      base.html         # Layout: sidebar, header, dark mode, selector cliente
+      chat.html         # Chat con panel de fuentes
+      ingest.html       # Formulario de ingesta (texto/archivo)
+      review.html       # Lista + detalle de items KB
+      kanban.html       # Board drag-and-drop con colores
+      settings.html     # Gestion de clientes y configuracion
+    static/
+      style.css         # Estilos adicionales
+  assistant/            # Modulo de conocimiento IA
+    ingestion/
+      extractors.py     # Extraction de texto, PDF, DOCX
+      schema.py         # Schema de sintesis estructurada
+      synthesis.py      # Pipeline OpenAI (sintesis + validacion)
+    retrieval/
+      embedding_service.py  # Generacion de embeddings
+      qdrant_service.py     # Operaciones Qdrant (upsert, search)
+    chat/
+      chat_service.py   # Servicio RAG (embedding, retrieval, respuesta)
+    storage/
+      models.py         # Modelos de datos (KBItem, Ingestion)
+      kb_repository.py  # Repositorio SQLite de items KB
+      ingestion_repository.py  # Repositorio de ingestas
+  kanban/               # Modulo de seguimiento operativo
+    storage/
+      kanban_repository.py  # Repositorio SQLite (tickets, columnas, historial)
+      csv_import.py         # Importacion masiva desde CSV
+  shared/               # Utilidades comunes
+    app_state.py        # Estado global de la aplicacion
+    client_manager.py   # Registro de clientes + aislamiento de carpetas
+    errors.py           # Excepciones personalizadas
+    tokens.py           # Utilidades de tokenizacion
+    logging_config.py   # Configuracion de logging
+run.py                  # Launcher (deps check, Docker, Qdrant, servidor)
+docker-compose.yml      # Qdrant container
+pyproject.toml          # Configuracion del proyecto
 ```
 
-## Data Isolation
+## Aislamiento de datos
 
-All data is physically separated by client:
+Toda la informacion esta fisicamente separada por cliente:
 
 ```
 data/
-  app.sqlite                    # Global config
+  app.sqlite                      # Config global (clientes registrados)
+  kanban_global.sqlite            # Columnas Kanban (compartidas)
   standard/
-    assistant_kb.sqlite         # Standard knowledge
+    assistant_kb.sqlite           # Knowledge base estandar
     uploads/
   clients/
     <CLIENT_CODE>/
-      assistant_kb.sqlite       # Client knowledge
+      assistant_kb.sqlite         # KB del cliente
+      kanban.sqlite               # Tickets Kanban del cliente
       uploads/
-      kanban.sqlite             # Client Kanban
 ```
 
 ## API Endpoints
 
-| Method | Path | Description |
+### Kanban
+| Metodo | Ruta | Descripcion |
 |--------|------|-------------|
-| GET | `/chat` | Chat page |
-| POST | `/api/chat/send` | Send question (SSE stream) |
-| GET | `/kanban` | Kanban board |
-| GET/POST | `/api/kanban/tickets` | List/create tickets |
-| PUT | `/api/kanban/tickets/{id}/move` | Move ticket (drag-drop) |
-| GET | `/review` | Review page |
-| POST | `/api/review/items/{id}/approve` | Approve + index KB item |
-| GET | `/ingest` | Ingest page |
-| POST | `/api/ingest/text` | Ingest text content |
-| POST | `/api/ingest/file` | Upload PDF/DOCX |
-| GET | `/settings` | Settings page |
-| POST | `/api/settings/client` | Register client |
+| GET | `/kanban` | Pagina del board |
+| GET | `/api/kanban/tickets` | Listar tickets |
+| POST | `/api/kanban/tickets` | Crear ticket |
+| PUT | `/api/kanban/tickets/{id}` | Editar ticket |
+| PUT | `/api/kanban/tickets/{id}/move` | Mover ticket (drag-drop) |
+| GET | `/api/kanban/tickets/{id}/history` | Historial de cambios |
+| GET | `/api/kanban/columns` | Listar columnas |
+| POST | `/api/kanban/columns` | Crear columna |
+| PUT | `/api/kanban/columns/{id}` | Renombrar columna |
+| PUT | `/api/kanban/columns/reorder` | Reordenar columnas |
+| DELETE | `/api/kanban/columns/{id}` | Eliminar columna |
+| POST | `/api/kanban/import-csv` | Importar tickets desde CSV |
 
-## Development
+### Assistant
+| Metodo | Ruta | Descripcion |
+|--------|------|-------------|
+| GET | `/chat` | Pagina de chat |
+| POST | `/api/chat/send` | Enviar pregunta (SSE stream) |
+| GET | `/ingest` | Pagina de ingesta |
+| POST | `/api/ingest/text` | Ingestar texto |
+| POST | `/api/ingest/file` | Subir PDF/DOCX |
+| GET | `/api/ingest/{id}/status` | Estado de ingesta |
+| GET | `/review` | Pagina de revision |
+| GET | `/api/review/items` | Listar items KB |
+| GET | `/api/review/items/{id}` | Detalle de item |
+| POST | `/api/review/items/{id}/approve` | Aprobar + indexar |
+| POST | `/api/review/items/{id}/reject` | Rechazar |
 
-See `PRACTICES.md` for engineering rules and workflow.
-
-## Current Status
-
-- [x] M0: Repo setup, CI, Qdrant Docker
-- [x] M1: Client manager + storage layout
-- [x] M2: Assistant SQLite repos (KB items + ingestions, dedupe, versioning)
-- [x] M3: Qdrant integration (collections, upsert, search)
-- [x] M4: Document extraction (Text, PDF, DOCX)
-- [x] M5: OpenAI synthesis pipeline (structured outputs, validation, retry)
-- [x] M6: Assistant chat RAG (embedding, retrieval, answer, traceability)
-- [x] M7: Kanban module (CRUD, history, independent DB)
-- [x] Web migration: FastAPI + Tailwind CSS + Alpine.js + SortableJS
+### Settings
+| Metodo | Ruta | Descripcion |
+|--------|------|-------------|
+| GET | `/settings` | Pagina de configuracion |
+| GET | `/api/settings/clients` | Listar clientes |
+| POST | `/api/settings/client` | Registrar cliente |
+| POST | `/api/settings/qdrant` | Configurar Qdrant URL |
+| POST | `/api/settings/apikey` | Configurar API key |
+| POST | `/api/session/client` | Cambiar cliente activo |
+| POST | `/api/session/standard-kb` | Toggle KB estandar |
