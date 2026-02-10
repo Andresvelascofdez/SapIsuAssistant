@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sap-isu-assistant"
+version = "0.1.0"
+description = "SAP IS-U Assistant with AI-powered knowledge base and Kanban"
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=1.50.0",
+    "qdrant-client>=1.11.0",
+    "python-docx>=1.1.0",
+    "pypdf>=4.0.0",
+    "tiktoken>=0.7.0",
+    "ttkbootstrap>=1.10.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-mock>=3.14.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --strict-markers"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
