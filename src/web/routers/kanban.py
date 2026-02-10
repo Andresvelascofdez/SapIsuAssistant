@@ -51,6 +51,15 @@ def _ticket_to_dict(t):
     }
 
 
+def _column_to_dict(c):
+    return {
+        "id": c.id,
+        "name": c.name,
+        "display_name": c.display_name,
+        "position": c.position,
+    }
+
+
 @router.get("/kanban")
 async def kanban_page(request: Request):
     ctx = get_template_context(request)
@@ -145,3 +154,86 @@ async def ticket_history(ticket_id: str, request: Request):
         }
         for h in history
     ]
+
+
+# ── Column management endpoints ──
+
+
+@router.get("/api/kanban/columns")
+async def list_columns(request: Request):
+    state = get_state(request)
+    repo = _get_kanban_repo(state)
+    if not repo:
+        return []
+    return [_column_to_dict(c) for c in repo.list_columns()]
+
+
+@router.post("/api/kanban/columns")
+async def create_column(request: Request):
+    state = get_state(request)
+    repo = _get_kanban_repo(state)
+    if not repo:
+        return JSONResponse({"error": "No client selected."}, status_code=400)
+
+    body = await request.json()
+    name = body.get("name", "").strip().upper().replace(" ", "_")
+    display_name = body.get("display_name", "").strip()
+    if not name or not display_name:
+        return JSONResponse({"error": "name and display_name are required."}, status_code=400)
+
+    try:
+        col = repo.create_column(name, display_name)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    return _column_to_dict(col)
+
+
+@router.put("/api/kanban/columns/reorder")
+async def reorder_columns(request: Request):
+    state = get_state(request)
+    repo = _get_kanban_repo(state)
+    if not repo:
+        return JSONResponse({"error": "No client selected."}, status_code=400)
+
+    body = await request.json()
+    ordered_ids = body.get("ordered_ids", [])
+    if not ordered_ids:
+        return JSONResponse({"error": "ordered_ids is required."}, status_code=400)
+
+    columns = repo.reorder_columns(ordered_ids)
+    return [_column_to_dict(c) for c in columns]
+
+
+@router.put("/api/kanban/columns/{col_id}")
+async def rename_column(col_id: int, request: Request):
+    state = get_state(request)
+    repo = _get_kanban_repo(state)
+    if not repo:
+        return JSONResponse({"error": "No client selected."}, status_code=400)
+
+    body = await request.json()
+    display_name = body.get("display_name", "").strip()
+    if not display_name:
+        return JSONResponse({"error": "display_name is required."}, status_code=400)
+
+    col = repo.rename_column(col_id, display_name)
+    if not col:
+        return JSONResponse({"error": "Column not found."}, status_code=404)
+    return _column_to_dict(col)
+
+
+@router.delete("/api/kanban/columns/{col_id}")
+async def delete_column(col_id: int, request: Request):
+    state = get_state(request)
+    repo = _get_kanban_repo(state)
+    if not repo:
+        return JSONResponse({"error": "No client selected."}, status_code=400)
+
+    try:
+        deleted = repo.delete_column(col_id)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+    if not deleted:
+        return JSONResponse({"error": "Column not found."}, status_code=404)
+    return {"status": "deleted"}

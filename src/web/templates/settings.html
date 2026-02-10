@@ -4,54 +4,54 @@
 <div x-data="settingsApp()" x-init="loadClients()" class="max-w-4xl mx-auto space-y-6">
 
   <!-- Client Management -->
-  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-    <h2 class="text-lg font-semibold text-gray-800 mb-4">Client Management</h2>
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Client Management</h2>
     <div class="grid grid-cols-3 gap-4 mb-4">
-      <input x-model="newCode" placeholder="Client code (e.g. SWE)" class="border rounded-lg px-3 py-2 text-sm">
-      <input x-model="newName" placeholder="Client name" class="border rounded-lg px-3 py-2 text-sm">
+      <input x-model="newCode" placeholder="Client code (e.g. SWE)" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+      <input x-model="newName" placeholder="Client name" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
       <button @click="registerClient()"
               class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
         Register Client
       </button>
     </div>
-    <div x-show="clientMsg" class="text-sm mb-3" :class="clientMsgType === 'error' ? 'text-red-600' : 'text-green-600'" x-text="clientMsg"></div>
-    <div class="border rounded-lg divide-y">
+    <div x-show="clientMsg" class="text-sm mb-3" :class="clientMsgType === 'error' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'" x-text="clientMsg"></div>
+    <div class="border dark:border-gray-700 rounded-lg divide-y dark:divide-gray-700">
       <template x-for="c in clientList" :key="c.code">
         <div class="px-4 py-3 flex justify-between items-center">
           <div>
-            <span class="text-sm font-semibold text-gray-800" x-text="c.code"></span>
-            <span class="text-sm text-gray-500 ml-2" x-text="c.name"></span>
+            <span class="text-sm font-semibold text-gray-800 dark:text-gray-100" x-text="c.code"></span>
+            <span class="text-sm text-gray-500 dark:text-gray-400 ml-2" x-text="c.name"></span>
           </div>
         </div>
       </template>
-      <div x-show="clientList.length === 0" class="px-4 py-6 text-center text-sm text-gray-400">No clients registered.</div>
+      <div x-show="clientList.length === 0" class="px-4 py-6 text-center text-sm text-gray-400 dark:text-gray-500">No clients registered.</div>
     </div>
   </div>
 
   <!-- Qdrant Configuration -->
-  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-    <h2 class="text-lg font-semibold text-gray-800 mb-4">Qdrant Vector Database</h2>
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Qdrant Vector Database</h2>
     <div class="flex gap-4">
-      <input x-model="qdrantUrl" class="flex-1 border rounded-lg px-3 py-2 text-sm" placeholder="http://localhost:6333">
+      <input x-model="qdrantUrl" class="flex-1 border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm" placeholder="http://localhost:6333">
       <button @click="applyQdrant()" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">Apply</button>
     </div>
-    <p x-show="qdrantMsg" class="text-sm text-green-600 mt-2" x-text="qdrantMsg"></p>
+    <p x-show="qdrantMsg" class="text-sm text-green-600 dark:text-green-400 mt-2" x-text="qdrantMsg"></p>
   </div>
 
   <!-- OpenAI API Key -->
-  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-    <h2 class="text-lg font-semibold text-gray-800 mb-4">OpenAI API Key</h2>
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">OpenAI API Key</h2>
     <div class="flex gap-4">
-      <input x-model="apiKey" type="password" class="flex-1 border rounded-lg px-3 py-2 text-sm" placeholder="sk-...">
+      <input x-model="apiKey" type="password" class="flex-1 border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm" placeholder="sk-...">
       <button @click="setApiKey()" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">Set</button>
     </div>
-    <p x-show="apiKeyMsg" class="text-sm text-green-600 mt-2" x-text="apiKeyMsg"></p>
+    <p x-show="apiKeyMsg" class="text-sm text-green-600 dark:text-green-400 mt-2" x-text="apiKeyMsg"></p>
   </div>
 
   <!-- Data Info -->
-  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-    <h2 class="text-lg font-semibold text-gray-800 mb-4">Data Location</h2>
-    <p class="text-sm text-gray-600">Data root: <code class="bg-gray-100 px-2 py-0.5 rounded text-xs">./data</code></p>
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Data Location</h2>
+    <p class="text-sm text-gray-600 dark:text-gray-300">Data root: <code class="bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 px-2 py-0.5 rounded text-xs">./data</code></p>
   </div>
 </div>
 

@@ -9,6 +9,7 @@ import sqlite3
 import pytest
 
 from src.kanban.storage.kanban_repository import (
+    KanbanColumn,
     KanbanRepository,
     Ticket,
     TicketHistoryEntry,
@@ -234,3 +235,145 @@ def test_kanban_db_has_no_assistant_tables(tmp_path):
         # Must NOT have assistant tables
         assert "kb_items" not in table_names
         assert "ingestions" not in table_names
+
+
+# ── Column management tests ──
+
+
+def test_init_seeds_default_columns(tmp_path):
+    """Test that init creates the 4 default columns."""
+    db_path = tmp_path / "kanban.sqlite"
+    repo = KanbanRepository(db_path)
+
+    columns = repo.list_columns()
+    assert len(columns) == 4
+    assert columns[0].name == "OPEN"
+    assert columns[0].display_name == "Open"
+    assert columns[0].position == 0
+    assert columns[1].name == "IN_PROGRESS"
+    assert columns[2].name == "WAITING"
+    assert columns[3].name == "DONE"
+
+
+def test_list_columns_ordered(tmp_path):
+    """Test columns are returned ordered by position."""
+    db_path = tmp_path / "kanban.sqlite"
+    repo = KanbanRepository(db_path)
+
+    columns = repo.list_columns()
+    positions = [c.position for c in columns]
+    assert positions == sorted(positions)
+
+
+def test_create_column(tmp_path):
+    """Test creating a new column."""
+    db_path = tmp_path / "kanban.sqlite"
+    repo = KanbanRepository(db_path)
+
+    col = repo.create_column("TESTING", "Testing")
+    assert col.name == "TESTING"
+    assert col.display_name == "Testing"
+    assert col.position == 4  # After the 4 defaults (0-3)
+
+    columns = repo.list_columns()
+    assert len(columns) == 5
+    assert columns[-1].name == "TESTING"
+
+
+def test_create_column_duplicate_fails(tmp_path):
+    """Test that creating a column with duplicate name fails."""
+    db_path = tmp_path / "kanban.sqlite"
+    repo = KanbanRepository(db_path)
+
+    with pytest.raises(Exception):
+        repo.create_column("OPEN", "Open Again")
+
+
+def test_rename_column(tmp_path):
+    """Test renaming a column's display name."""
+    db_path = tmp_path / "kanban.sqlite"
+    repo = KanbanRepository(db_path)
+
+    columns = repo.list_columns()
+    col = columns[0]  # OPEN
+    renamed = repo.rename_column(col.id, "Nuevo Abierto")
+    assert renamed.display_name == "Nuevo Abierto"
+    assert renamed.name == "OPEN"  # Internal name unchanged
+
+
+def test_rename_column_nonexistent(tmp_path):
+    """Test renaming a non-existent column returns None."""
+    db_path = tmp_path / "kanban.sqlite"
+    repo = KanbanRepository(db_path)
+
+    result = repo.rename_column(9999, "Ghost")
+    assert result is None
+
+
+def test_delete_column(tmp_path):
+    """Test deleting an empty column."""
+    db_path = tmp_path / "kanban.sqlite"
+    repo = KanbanRepository(db_path)
+
+    col = repo.create_column("TEMP", "Temporary")
+    assert repo.delete_column(col.id) is True
+
+    columns = repo.list_columns()
+    names = [c.name for c in columns]
+    assert "TEMP" not in names
+
+
+def test_delete_column_with_tickets_fails(tmp_path):
+    """Test that deleting a column with tickets raises ValueError."""
+    db_path = tmp_path / "kanban.sqlite"
+    repo = KanbanRepository(db_path)
+
+    # OPEN column has tickets after creating one
+    repo.create_ticket(title="Blocker ticket")
+
+    columns = repo.list_columns()
+    open_col = next(c for c in columns if c.name == "OPEN")
+
+    with pytest.raises(ValueError, match="ticket"):
+        repo.delete_column(open_col.id)
+
+
+def test_delete_column_nonexistent(tmp_path):
+    """Test deleting a non-existent column returns False."""
+    db_path = tmp_path / "kanban.sqlite"
+    repo = KanbanRepository(db_path)
+
+    assert repo.delete_column(9999) is False
+
+
+def test_reorder_columns(tmp_path):
+    """Test reordering columns."""
+    db_path = tmp_path / "kanban.sqlite"
+    repo = KanbanRepository(db_path)
+
+    columns = repo.list_columns()
+    # Reverse the order
+    reversed_ids = [c.id for c in reversed(columns)]
+    reordered = repo.reorder_columns(reversed_ids)
+
+    assert reordered[0].name == "DONE"
+    assert reordered[1].name == "WAITING"
+    assert reordered[2].name == "IN_PROGRESS"
+    assert reordered[3].name == "OPEN"
+
+    # Verify positions are sequential
+    for i, col in enumerate(reordered):
+        assert col.position == i
+
+
+def test_kanban_columns_table_exists(tmp_path):
+    """Test that kanban_columns table exists in the database."""
+    db_path = tmp_path / "kanban.sqlite"
+    repo = KanbanRepository(db_path)
+
+    with sqlite3.connect(db_path) as conn:
+        tables = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+        ).fetchall()
+        table_names = [t[0] for t in tables]
+        assert "kanban_columns" in table_names
