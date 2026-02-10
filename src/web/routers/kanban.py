@@ -1,9 +1,11 @@
 """Kanban router with drag-drop support."""
+import csv
+import io
 import json
 import logging
 
-from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Request, Query
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.web.dependencies import get_state, get_client_manager, get_template_context, templates
 
@@ -53,6 +55,7 @@ def _ticket_to_dict(t):
         "priority": t.priority,
         "notes": t.notes,
         "tags": json.loads(t.tags_json) if t.tags_json else [],
+        "links": json.loads(t.links_json) if t.links_json else [],
         "created_at": t.created_at,
         "updated_at": t.updated_at,
         "closed_at": t.closed_at,
@@ -75,18 +78,29 @@ async def kanban_page(request: Request):
 
 
 @router.get("/api/kanban/tickets")
-async def list_tickets(request: Request):
+async def list_tickets(
+    request: Request,
+    search: str = Query(default=None),
+    priority: str = Query(default=None),
+    limit: int = Query(default=None),
+    offset: int = Query(default=0),
+):
     state = get_state(request)
     repo = _get_kanban_repo(state)
 
     if repo:
-        tickets = repo.list_tickets()
+        tickets = repo.list_tickets(search=search, priority=priority, limit=limit, offset=offset)
+        total = repo.count_tickets(search=search, priority=priority)
     else:
         tickets = []
+        total = 0
         for _code, r in _get_all_repos(state):
-            tickets.extend(r.list_tickets())
+            tickets.extend(r.list_tickets(search=search, priority=priority))
+        total = len(tickets)
+        if limit is not None:
+            tickets = tickets[offset:offset + limit]
 
-    return [_ticket_to_dict(t) for t in tickets]
+    return {"tickets": [_ticket_to_dict(t) for t in tickets], "total": total}
 
 
 @router.post("/api/kanban/tickets")
@@ -146,6 +160,8 @@ async def update_ticket(ticket_id: str, request: Request):
         title=body.get("title"),
         priority=body.get("priority"),
         notes=body.get("notes"),
+        tags=body.get("tags"),
+        links=body.get("links"),
     )
     if not ticket:
         return JSONResponse({"error": "Ticket not found."}, status_code=404)
@@ -280,3 +296,54 @@ async def import_csv(request: Request):
         return JSONResponse({"error": str(e)}, status_code=500)
 
     return result
+
+
+@router.delete("/api/kanban/tickets/{ticket_id}")
+async def delete_ticket(ticket_id: str, request: Request):
+    state = get_state(request)
+    repo = _get_kanban_repo(state)
+    if not repo:
+        return JSONResponse({"error": "No client selected."}, status_code=400)
+
+    deleted = repo.delete_ticket(ticket_id)
+    if not deleted:
+        return JSONResponse({"error": "Ticket not found."}, status_code=404)
+    return {"status": "deleted"}
+
+
+@router.get("/api/kanban/export-csv")
+async def export_csv(request: Request):
+    """Export all tickets as a CSV download."""
+    state = get_state(request)
+    repo = _get_kanban_repo(state)
+
+    if repo:
+        tickets = repo.list_tickets()
+    else:
+        tickets = []
+        for _code, r in _get_all_repos(state):
+            tickets.extend(r.list_tickets())
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["ID Tarea", "Titulo", "Estado", "Prioridad", "Notas", "Tags", "Creado", "Actualizado", "Cerrado"])
+    for t in tickets:
+        tags = json.loads(t.tags_json) if t.tags_json else []
+        writer.writerow([
+            t.ticket_id or "",
+            t.title,
+            t.status,
+            t.priority,
+            t.notes or "",
+            ", ".join(tags),
+            t.created_at,
+            t.updated_at,
+            t.closed_at or "",
+        ])
+
+    content = output.getvalue()
+    return StreamingResponse(
+        io.BytesIO(content.encode("utf-8-sig")),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=kanban_export.csv"},
+    )
