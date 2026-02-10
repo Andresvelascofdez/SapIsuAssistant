@@ -11,9 +11,11 @@ from src.shared.client_manager import ClientManager
 
 
 STATUS_MAP = {
+    "No analizado": "NO_ANALIZADO",
     "En progreso": "EN_PROGRESO",
     "Mas info": "MAS_INFO",
     "Analizado": "ANALIZADO",
+    "Analizado - Pendiente respuesta": "ANALIZADO_PENDIENTE_RESPUESTA",
     "Analizado- Pendiente respuesta": "ANALIZADO_PENDIENTE_RESPUESTA",
     "Pendiente de transporte": "PENDIENTE_DE_TRANSPORTE",
     "Testing": "TESTING",

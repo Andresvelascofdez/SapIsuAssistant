@@ -203,7 +203,7 @@ class TestKanbanAPI:
         data = resp.json()
         assert data["title"] == "Fix IDEX issue"
         assert data["priority"] == "HIGH"
-        assert data["status"] == "EN_PROGRESO"
+        assert data["status"] == "NO_ANALIZADO"
         assert data["notes"] == "Check SAP note 12345"
 
     def test_create_ticket_empty_title(self, client):
@@ -289,20 +289,21 @@ class TestKanbanColumnsAPI:
         resp = client.get("/api/kanban/columns")
         assert resp.status_code == 200
         data = resp.json()
-        assert len(data) == 7
+        assert len(data) == 8
 
     def test_list_columns_defaults(self, client):
         resp = client.get("/api/kanban/columns")
         assert resp.status_code == 200
         data = resp.json()
-        assert len(data) == 7
-        assert data[0]["name"] == "EN_PROGRESO"
-        assert data[1]["name"] == "MAS_INFO"
-        assert data[2]["name"] == "ANALIZADO"
-        assert data[3]["name"] == "ANALIZADO_PENDIENTE_RESPUESTA"
+        assert len(data) == 8
+        assert data[0]["name"] == "NO_ANALIZADO"
+        assert data[1]["name"] == "EN_PROGRESO"
+        assert data[2]["name"] == "MAS_INFO"
+        assert data[3]["name"] == "TESTING"
         assert data[4]["name"] == "PENDIENTE_DE_TRANSPORTE"
-        assert data[5]["name"] == "TESTING"
-        assert data[6]["name"] == "CERRADO"
+        assert data[5]["name"] == "ANALIZADO_PENDIENTE_RESPUESTA"
+        assert data[6]["name"] == "ANALIZADO"
+        assert data[7]["name"] == "CERRADO"
 
     def test_create_column(self, client):
         resp = client.post("/api/kanban/columns", json={
@@ -313,7 +314,7 @@ class TestKanbanColumnsAPI:
         data = resp.json()
         assert data["name"] == "CUSTOM"
         assert data["display_name"] == "Custom"
-        assert data["position"] == 7
+        assert data["position"] == 8
 
     def test_create_column_without_client_succeeds(self, client):
         """Columns are global - creation works without a client selected."""
@@ -373,13 +374,13 @@ class TestKanbanColumnsAPI:
 
     def test_delete_column_with_tickets(self, client):
         self._register_and_select(client)
-        # Create a ticket in EN_PROGRESO column
+        # Create a ticket in NO_ANALIZADO column (default for new tickets via API)
         client.post("/api/kanban/tickets", json={"title": "Blocker"})
 
         cols = client.get("/api/kanban/columns").json()
-        ep_col = next(c for c in cols if c["name"] == "EN_PROGRESO")
+        na_col = next(c for c in cols if c["name"] == "NO_ANALIZADO")
 
-        resp = client.delete(f"/api/kanban/columns/{ep_col['id']}")
+        resp = client.delete(f"/api/kanban/columns/{na_col['id']}")
         assert resp.status_code == 400
         assert "ticket" in resp.json()["error"].lower()
 
@@ -398,7 +399,7 @@ class TestKanbanColumnsAPI:
         assert resp.status_code == 200
         data = resp.json()
         assert data[0]["name"] == "CERRADO"
-        assert data[-1]["name"] == "EN_PROGRESO"
+        assert data[-1]["name"] == "NO_ANALIZADO"
 
     def test_reorder_columns_without_client_succeeds(self, client):
         """Columns are global - reorder works without a client selected."""
