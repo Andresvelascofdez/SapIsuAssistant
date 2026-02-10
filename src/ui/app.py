@@ -42,6 +42,7 @@ class SapAssistantApp:
             size=(1200, 800),
             minsize=(900, 600),
         )
+        self.root._app_ref = self
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
         self._build_top_bar()
