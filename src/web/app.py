@@ -2,6 +2,7 @@
 FastAPI application for SAP IS-U Assistant.
 """
 import os
+import secrets
 from pathlib import Path
 
 import uvicorn
@@ -12,9 +13,25 @@ from starlette.middleware.sessions import SessionMiddleware
 from src.shared.logging_config import configure_logging
 
 _HERE = Path(__file__).resolve().parent
+_DATA_ROOT = Path(os.environ.get("SAP_DATA_ROOT", "./data"))
+
+
+def _get_session_secret() -> str:
+    """Get or generate a persistent session secret key."""
+    env_key = os.environ.get("SESSION_SECRET")
+    if env_key:
+        return env_key
+    _DATA_ROOT.mkdir(parents=True, exist_ok=True)
+    key_file = _DATA_ROOT / ".session_key"
+    if key_file.exists():
+        return key_file.read_text().strip()
+    key = secrets.token_hex(32)
+    key_file.write_text(key)
+    return key
+
 
 app = FastAPI(title="SAP IS-U Assistant", version="0.1.0")
-app.add_middleware(SessionMiddleware, secret_key=os.environ.get("SESSION_SECRET", "sap-assistant-dev-key"))
+app.add_middleware(SessionMiddleware, secret_key=_get_session_secret())
 app.mount("/static", StaticFiles(directory=_HERE / "static"), name="static")
 
 # Import and include routers

@@ -1,17 +1,20 @@
 {% extends "base.html" %}
 {% set active_tab = "kanban" %}
+{% block head_extra %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+{% endblock %}
 {% block content %}
 <div x-data="kanbanApp()" x-init="loadData()" class="h-[calc(100vh-8rem)]">
 
   <!-- Top bar -->
-  <div class="flex items-center gap-4 mb-6">
+  <div class="flex flex-wrap items-center gap-3 mb-4">
     <button @click="showNewModal = true"
             class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
-      + New Ticket
+      + Ticket
     </button>
     <button @click="showNewColModal = true"
             class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
-      + Column
+      + Columna
     </button>
     <button @click="loadData()"
             class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition">
@@ -20,25 +23,41 @@
     <button @click="hideClosed = !hideClosed"
             class="px-4 py-2 rounded-lg text-sm font-medium transition"
             :class="hideClosed
-              ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200 dark:bg-yellow-900 dark:text-yellow-200 dark:hover:bg-yellow-800'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'">
-      <span x-text="hideClosed ? 'Cerrados ocultos (' + ticketsByCol('CERRADO').length + ')' : 'Ocultar cerrados'"></span>
+              ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200 dark:bg-yellow-900 dark:text-yellow-200'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200'">
+      <span x-text="hideClosed ? 'Cerrados ocultos (' + tickets.filter(t => t.status === 'CERRADO').length + ')' : 'Ocultar cerrados'"></span>
     </button>
+    <a href="/api/kanban/export-csv"
+       class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition">
+      Exportar CSV
+    </a>
+
+    <div class="flex-1"></div>
+
+    <!-- Filters -->
+    <select x-model="filterPriority" @change="loadData()"
+            class="border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+      <option value="">Todas prioridades</option>
+      <option value="CRITICAL">Critical</option>
+      <option value="HIGH">High</option>
+      <option value="MEDIUM">Medium</option>
+      <option value="LOW">Low</option>
+    </select>
     <div class="relative">
-      <input x-model="searchQuery" placeholder="Buscar por ID..."
-             class="border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 w-48 placeholder-gray-400"
-             @keydown.escape="searchQuery = ''">
-      <button x-show="searchQuery" @click="searchQuery = ''" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+      <input x-model="searchQuery" @input.debounce.300ms="loadData()" placeholder="Buscar tickets..."
+             class="border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 w-56 placeholder-gray-400"
+             @keydown.escape="searchQuery = ''; loadData()">
+      <button x-show="searchQuery" @click="searchQuery = ''; loadData()" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
-    <span class="text-sm text-gray-500 dark:text-gray-400" x-text="activeTicketCount + ' tickets activos'"></span>
+    <span class="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap" x-text="activeTicketCount + ' tickets activos'"></span>
   </div>
 
-  <!-- Board columns (draggable) -->
-  <div class="flex gap-4 h-[calc(100%-4rem)] overflow-x-auto pb-2" id="columns-container" x-init="initColumnSortable()">
+  <!-- Board columns -->
+  <div class="flex gap-3 h-[calc(100%-3.5rem)] overflow-x-auto pb-2" id="columns-container" x-init="initColumnSortable()">
     <template x-for="col in visibleColumns()" :key="col.id">
-      <div class="flex flex-col rounded-xl min-w-[280px] w-[280px] flex-shrink-0 border-t-4"
+      <div class="flex flex-col rounded-xl flex-shrink-0 border-t-4 kanban-column"
            :class="colStyle(col.name).border"
            :data-col-id="col.id">
         <!-- Column header -->
@@ -49,7 +68,15 @@
               <div>
                 <h3 class="text-sm font-bold truncate" :class="colStyle(col.name).title" x-text="col.display_name"
                     @dblclick="startEditCol(col)"></h3>
-                <span class="text-xs opacity-70" :class="colStyle(col.name).title" x-text="ticketsByCol(col.name).length + ' tickets'"></span>
+                <div class="flex items-center gap-2 mt-0.5">
+                  <span class="text-xs opacity-70" :class="colStyle(col.name).title" x-text="ticketsByCol(col.name).length + ' tickets'"></span>
+                  <template x-if="priorityBreakdown(col.name).critical > 0">
+                    <span class="text-xs bg-red-200 text-red-800 dark:bg-red-900 dark:text-red-200 px-1.5 rounded-full" x-text="priorityBreakdown(col.name).critical + ' CRIT'"></span>
+                  </template>
+                  <template x-if="priorityBreakdown(col.name).high > 0">
+                    <span class="text-xs bg-orange-200 text-orange-800 dark:bg-orange-900 dark:text-orange-200 px-1.5 rounded-full" x-text="priorityBreakdown(col.name).high + ' HIGH'"></span>
+                  </template>
+                </div>
               </div>
             </template>
             <template x-if="editingCol === col.id">
@@ -58,16 +85,17 @@
                      class="w-full border dark:border-gray-600 rounded px-2 py-1 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
             </template>
           </div>
-          <button @click.stop="deleteCol(col)" class="opacity-0 group-hover:opacity-100 ml-2 text-gray-400 hover:text-red-500 transition text-sm" title="Delete column">
+          <button @click.stop="deleteCol(col)" class="opacity-0 group-hover:opacity-100 ml-2 text-gray-400 hover:text-red-500 transition text-sm" title="Eliminar columna">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
         </div>
         <!-- Ticket cards -->
-        <div class="flex-1 overflow-y-auto p-3 space-y-2 min-h-[100px]"
+        <div class="flex-1 overflow-y-auto p-3 space-y-2 min-h-[100px] transition-colors duration-200"
              :id="'col-' + col.name"
              x-init="initSortable($el, col.name)">
           <template x-for="ticket in ticketsByCol(col.name)" :key="ticket.id">
-            <div class="bg-white dark:bg-gray-700 rounded-lg shadow-sm border-2 border-green-400 dark:border-green-600 p-3 cursor-grab active:cursor-grabbing"
+            <div class="bg-white dark:bg-gray-700 rounded-lg shadow-sm p-3 cursor-grab active:cursor-grabbing border-l-4 border border-gray-200 dark:border-gray-600"
+                 :class="priorityBorderClass(ticket.priority)"
                  :data-id="ticket.id"
                  @click="selectTicket(ticket)">
               <div class="flex items-center justify-between mb-1">
@@ -81,9 +109,23 @@
                       }" x-text="ticket.priority"></span>
               </div>
               <div class="text-base font-bold text-gray-900 dark:text-white leading-snug" x-text="ticket.title"></div>
-              <div x-show="ticket.notes" class="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate" x-text="ticket.notes"></div>
+              <div x-show="ticket.notes"
+                   class="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2 prose-sm"
+                   x-html="renderMarkdown(ticket.notes)"></div>
+              <div class="flex items-center justify-between mt-2">
+                <div class="flex flex-wrap gap-1">
+                  <template x-for="tag in (ticket.tags || []).slice(0, 3)" :key="tag">
+                    <span class="bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-300 text-xs px-1.5 py-0.5 rounded" x-text="tag"></span>
+                  </template>
+                </div>
+                <span class="text-xs text-gray-400 dark:text-gray-500" x-text="timeAgo(ticket.updated_at)"></span>
+              </div>
             </div>
           </template>
+          <!-- Empty state -->
+          <div x-show="ticketsByCol(col.name).length === 0" class="flex items-center justify-center h-20 text-sm text-gray-400 dark:text-gray-500 italic">
+            Sin tickets
+          </div>
         </div>
       </div>
     </template>
@@ -91,53 +133,92 @@
 
   <!-- New ticket modal -->
   <div x-show="showNewModal" x-transition class="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-96 p-6" @click.outside="showNewModal = false">
-      <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">New Ticket</h3>
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-96 max-w-[90vw] p-6" @click.outside="showNewModal = false">
+      <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Nuevo Ticket</h3>
       <div class="space-y-3">
-        <input x-model="newTicket.title" placeholder="Title" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        <input x-model="newTicket.title" placeholder="Titulo" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
         <select x-model="newTicket.priority" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
           <option value="LOW">Low</option><option value="MEDIUM" selected>Medium</option>
           <option value="HIGH">High</option><option value="CRITICAL">Critical</option>
         </select>
-        <textarea x-model="newTicket.notes" placeholder="Notes (optional)" rows="3" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
+        <textarea x-model="newTicket.notes" placeholder="Notas (opcional)" rows="3" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
       </div>
       <div class="flex justify-end gap-3 mt-4">
-        <button @click="showNewModal = false" class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Cancel</button>
-        <button @click="createTicket()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Create</button>
+        <button @click="showNewModal = false" class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Cancelar</button>
+        <button @click="createTicket()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Crear</button>
       </div>
     </div>
   </div>
 
   <!-- New column modal -->
   <div x-show="showNewColModal" x-transition class="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-96 p-6" @click.outside="showNewColModal = false">
-      <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">New Column</h3>
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-96 max-w-[90vw] p-6" @click.outside="showNewColModal = false">
+      <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Nueva Columna</h3>
       <div class="space-y-3">
-        <input x-model="newColName" placeholder="Column name (e.g. Testing)" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        <input x-model="newColName" placeholder="Nombre de columna" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
       </div>
       <div class="flex justify-end gap-3 mt-4">
-        <button @click="showNewColModal = false" class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Cancel</button>
-        <button @click="createCol()" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Create</button>
+        <button @click="showNewColModal = false" class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Cancelar</button>
+        <button @click="createCol()" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Crear</button>
       </div>
     </div>
   </div>
 
   <!-- Detail modal -->
   <div x-show="selectedTicket" x-transition class="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-[480px] p-6" @click.outside="selectedTicket = null">
-      <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Ticket Detail</h3>
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-[540px] max-w-[95vw] max-h-[90vh] overflow-y-auto p-6" @click.outside="selectedTicket = null">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Detalle de Ticket</h3>
+        <button @click="confirmDeleteTicket()" class="text-red-500 hover:text-red-700 text-sm font-medium px-3 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/30 transition" title="Eliminar ticket">
+          Eliminar
+        </button>
+      </div>
       <template x-if="selectedTicket">
         <div class="space-y-3">
-          <div x-show="selectedTicket.ticket_id" class="text-xs font-mono text-gray-400 dark:text-gray-500" x-text="selectedTicket.ticket_id"></div>
-          <input x-model="selectedTicket.title" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
-          <select x-model="selectedTicket.priority" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
-            <option value="LOW">Low</option><option value="MEDIUM">Medium</option>
-            <option value="HIGH">High</option><option value="CRITICAL">Critical</option>
-          </select>
-          <textarea x-model="selectedTicket.notes" rows="3" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
+          <div x-show="selectedTicket.ticket_id" class="text-sm font-mono font-bold text-green-700 dark:text-green-400" x-text="selectedTicket.ticket_id"></div>
+          <div class="text-xs text-gray-400 dark:text-gray-500" x-text="'Creado: ' + formatDate(selectedTicket.created_at) + '  |  Modificado: ' + timeAgo(selectedTicket.updated_at)"></div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Titulo</label>
+            <input x-model="selectedTicket.title" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+          </div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Prioridad</label>
+            <select x-model="selectedTicket.priority" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+              <option value="LOW">Low</option><option value="MEDIUM">Medium</option>
+              <option value="HIGH">High</option><option value="CRITICAL">Critical</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Notas (Markdown)</label>
+            <textarea x-model="selectedTicket.notes" rows="4" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-mono bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
+          </div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Tags (separados por coma)</label>
+            <input x-model="selectedTicketTagsStr" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                   placeholder="bug, urgente, SAP">
+          </div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Links (uno por linea)</label>
+            <textarea x-model="selectedTicketLinksStr" rows="2" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-mono bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                      placeholder="https://jira.example.com/ISSUE-123"></textarea>
+          </div>
+          <!-- History -->
+          <div x-show="ticketHistory.length > 0">
+            <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Historial</label>
+            <div class="border dark:border-gray-600 rounded-lg divide-y dark:divide-gray-600 max-h-32 overflow-y-auto">
+              <template x-for="h in ticketHistory" :key="h.changed_at">
+                <div class="px-3 py-1.5 flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+                  <span x-text="h.from_status || '(nuevo)'" class="font-mono"></span>
+                  <svg class="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+                  <span x-text="h.to_status" class="font-mono font-semibold"></span>
+                  <span class="ml-auto text-gray-400" x-text="timeAgo(h.changed_at)"></span>
+                </div>
+              </template>
+            </div>
+          </div>
           <div class="flex justify-end gap-3 mt-4">
-            <button @click="selectedTicket = null" class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Close</button>
-            <button @click="saveTicket()" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Save</button>
+            <button @click="selectedTicket = null" class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Cerrar</button>
+            <button @click="saveTicket()" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Guardar</button>
           </div>
         </div>
       </template>
@@ -150,16 +231,20 @@ function kanbanApp() {
   return {
     columns: [],
     tickets: [],
+    totalTickets: 0,
     showNewModal: false,
     showNewColModal: false,
     selectedTicket: null,
-    statusText: '',
+    selectedTicketTagsStr: '',
+    selectedTicketLinksStr: '',
+    ticketHistory: [],
     newTicket: {title: '', priority: 'MEDIUM', notes: ''},
     newColName: '',
     editingCol: null,
     editingColName: '',
     hideClosed: false,
     searchQuery: '',
+    filterPriority: '',
 
     get activeTicketCount() {
       return this.tickets.filter(t => t.status !== 'CERRADO').length;
@@ -184,23 +269,71 @@ function kanbanApp() {
       return styles[name] || { header: 'bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700', border: 'border-gray-400 dark:border-gray-500 bg-gray-50 dark:bg-gray-800', title: 'text-gray-700 dark:text-gray-200' };
     },
 
+    priorityBorderClass(priority) {
+      return {
+        'border-l-red-500': priority === 'CRITICAL',
+        'border-l-orange-500': priority === 'HIGH',
+        'border-l-blue-400': priority === 'MEDIUM',
+        'border-l-gray-300 dark:border-l-gray-500': priority === 'LOW',
+      };
+    },
+
+    priorityBreakdown(colName) {
+      const col = this.ticketsByCol(colName);
+      return {
+        critical: col.filter(t => t.priority === 'CRITICAL').length,
+        high: col.filter(t => t.priority === 'HIGH').length,
+      };
+    },
+
     ticketsByCol(colName) {
-      let filtered = this.tickets.filter(t => t.status === colName);
-      if (this.searchQuery.trim()) {
-        const q = this.searchQuery.trim().toLowerCase();
-        filtered = filtered.filter(t => (t.ticket_id || '').toLowerCase().includes(q));
-      }
-      return filtered;
+      return this.tickets.filter(t => t.status === colName);
+    },
+
+    renderMarkdown(text) {
+      if (!text) return '';
+      try {
+        const short = text.length > 120 ? text.substring(0, 120) + '...' : text;
+        return marked.parseInline(short);
+      } catch(e) { return text; }
+    },
+
+    timeAgo(dateStr) {
+      if (!dateStr) return '';
+      const date = new Date(dateStr);
+      const now = new Date();
+      const diffMs = now - date;
+      const diffMins = Math.floor(diffMs / 60000);
+      if (diffMins < 1) return 'ahora';
+      if (diffMins < 60) return diffMins + ' min';
+      const diffHours = Math.floor(diffMins / 60);
+      if (diffHours < 24) return diffHours + 'h';
+      const diffDays = Math.floor(diffHours / 24);
+      if (diffDays === 1) return 'ayer';
+      if (diffDays < 30) return diffDays + 'd';
+      const diffMonths = Math.floor(diffDays / 30);
+      return diffMonths + ' mes' + (diffMonths > 1 ? 'es' : '');
+    },
+
+    formatDate(dateStr) {
+      if (!dateStr) return '';
+      return new Date(dateStr).toLocaleDateString('es-ES', {day: '2-digit', month: '2-digit', year: 'numeric'});
     },
 
     async loadData() {
+      const params = new URLSearchParams();
+      if (this.searchQuery.trim()) params.set('search', this.searchQuery.trim());
+      if (this.filterPriority) params.set('priority', this.filterPriority);
+      const qs = params.toString() ? '?' + params.toString() : '';
+
       const [colResp, ticketResp] = await Promise.all([
         fetch('/api/kanban/columns'),
-        fetch('/api/kanban/tickets'),
+        fetch('/api/kanban/tickets' + qs),
       ]);
       this.columns = await colResp.json();
-      this.tickets = await ticketResp.json();
-      this.statusText = this.tickets.length + ' tickets';
+      const data = await ticketResp.json();
+      this.tickets = data.tickets;
+      this.totalTickets = data.total;
     },
 
     async createTicket() {
@@ -215,17 +348,41 @@ function kanbanApp() {
       await this.loadData();
     },
 
-    selectTicket(ticket) {
+    async selectTicket(ticket) {
       this.selectedTicket = {...ticket};
+      this.selectedTicketTagsStr = (ticket.tags || []).join(', ');
+      this.selectedTicketLinksStr = (ticket.links || []).join('\n');
+      // Load history
+      try {
+        const resp = await fetch('/api/kanban/tickets/' + ticket.id + '/history');
+        this.ticketHistory = await resp.json();
+      } catch(e) { this.ticketHistory = []; }
     },
 
     async saveTicket() {
       if (!this.selectedTicket) return;
+      const tags = this.selectedTicketTagsStr.split(',').map(s => s.trim()).filter(Boolean);
+      const links = this.selectedTicketLinksStr.split('\n').map(s => s.trim()).filter(Boolean);
       await fetch('/api/kanban/tickets/' + this.selectedTicket.id, {
         method: 'PUT',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(this.selectedTicket),
+        body: JSON.stringify({
+          title: this.selectedTicket.title,
+          priority: this.selectedTicket.priority,
+          notes: this.selectedTicket.notes,
+          tags: tags,
+          links: links,
+        }),
       });
+      this.selectedTicket = null;
+      await this.loadData();
+    },
+
+    async confirmDeleteTicket() {
+      if (!this.selectedTicket) return;
+      const name = this.selectedTicket.ticket_id || this.selectedTicket.title;
+      if (!confirm('Eliminar ticket "' + name + '"? Esta accion no se puede deshacer.')) return;
+      await fetch('/api/kanban/tickets/' + this.selectedTicket.id, {method: 'DELETE'});
       this.selectedTicket = null;
       await this.loadData();
     },
@@ -245,7 +402,7 @@ function kanbanApp() {
         await this.loadData();
       } else {
         const data = await resp.json();
-        alert(data.error || 'Failed to create column');
+        alert(data.error || 'Error al crear columna');
       }
     },
 
@@ -271,16 +428,16 @@ function kanbanApp() {
     async deleteCol(col) {
       const count = this.ticketsByCol(col.name).length;
       if (count > 0) {
-        alert('Cannot delete column "' + col.display_name + '": it has ' + count + ' ticket(s). Move them first.');
+        alert('No se puede eliminar "' + col.display_name + '": tiene ' + count + ' ticket(s). Muevalos primero.');
         return;
       }
-      if (!confirm('Delete column "' + col.display_name + '"?')) return;
+      if (!confirm('Eliminar columna "' + col.display_name + '"?')) return;
       const resp = await fetch('/api/kanban/columns/' + col.id, {method: 'DELETE'});
       if (resp.ok) {
         await this.loadData();
       } else {
         const data = await resp.json();
-        alert(data.error || 'Failed to delete column');
+        alert(data.error || 'Error al eliminar columna');
       }
     },
 
@@ -311,7 +468,15 @@ function kanbanApp() {
         animation: 200,
         ghostClass: 'opacity-30',
         dragClass: 'shadow-lg',
+        onStart: function(evt) {
+          document.querySelectorAll('[id^="col-"]').forEach(c => {
+            if (c !== evt.from) c.classList.add('bg-blue-50/50', 'dark:bg-blue-900/20');
+          });
+        },
         onEnd: async function(evt) {
+          document.querySelectorAll('[id^="col-"]').forEach(c => {
+            c.classList.remove('bg-blue-50/50', 'dark:bg-blue-900/20');
+          });
           const ticketId = evt.item.dataset.id;
           const targetCol = evt.to.id.replace('col-', '');
           if (ticketId && targetCol) {

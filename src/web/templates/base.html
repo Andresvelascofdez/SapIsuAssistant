@@ -1,19 +1,13 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SAP IS-U Assistant</title>
-  <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
   <link rel="stylesheet" href="/static/style.css">
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: { extend: { colors: { sap: { 50:'#eff6ff', 100:'#dbeafe', 500:'#3b82f6', 600:'#2563eb', 700:'#1d4ed8' } } } }
-    }
-  </script>
+  {% block head_extra %}{% endblock %}
   <script>
     if (localStorage.getItem('darkMode') === 'true') {
       document.documentElement.classList.add('dark');
@@ -22,40 +16,62 @@
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 min-h-screen flex transition-colors" x-data="globalState()" x-init="init()">
 
+  <!-- Mobile overlay -->
+  <div x-show="sidebarOpen" @click="sidebarOpen = false"
+       class="fixed inset-0 bg-black/50 z-20 lg:hidden" x-transition.opacity></div>
+
   <!-- Sidebar -->
-  <aside class="w-56 bg-gray-900 dark:bg-gray-950 text-gray-100 flex flex-col min-h-screen fixed">
-    <div class="px-4 py-5 border-b border-gray-700">
-      <h1 class="text-lg font-bold tracking-tight">SAP IS-U</h1>
-      <p class="text-xs text-gray-400">Assistant + Kanban</p>
+  <aside :class="sidebarCollapsed ? 'w-16' : 'w-56'"
+         class="bg-gray-900 dark:bg-gray-950 text-gray-100 flex flex-col min-h-screen fixed z-30 transition-all duration-200
+                max-lg:w-56 max-lg:-translate-x-full"
+         :class="{'max-lg:translate-x-0': sidebarOpen, 'max-lg:-translate-x-full': !sidebarOpen}">
+    <div class="px-4 py-5 border-b border-gray-700 flex items-center justify-between">
+      <div x-show="!sidebarCollapsed || window.innerWidth < 1024">
+        <h1 class="text-lg font-bold tracking-tight">SAP IS-U</h1>
+        <p class="text-xs text-gray-400">Assistant + Kanban</p>
+      </div>
+      <button @click="sidebarCollapsed = !sidebarCollapsed" class="text-gray-400 hover:text-white hidden lg:block">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/>
+        </svg>
+      </button>
     </div>
     <nav class="flex-1 px-2 py-4 space-y-1">
       {% set nav_items = [
         ("chat", "Chat", "M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"),
-        ("ingest", "Knowledge Ingest", "M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"),
-        ("review", "Knowledge Review", "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"),
-        ("kanban", "Kanban Board", "M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7"),
+        ("ingest", "Ingesta", "M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"),
+        ("review", "Review", "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"),
+        ("kanban", "Kanban", "M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7"),
         ("settings", "Settings", "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"),
       ] %}
       {% for href, label, icon_path in nav_items %}
       <a href="/{{ href }}"
          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition
-                {% if active_tab == href %}bg-sap-600 text-white{% else %}text-gray-300 hover:bg-gray-800 hover:text-white{% endif %}">
+                {% if active_tab == href %}bg-sap-600 text-white{% else %}text-gray-300 hover:bg-gray-800 hover:text-white{% endif %}"
+         :title="sidebarCollapsed ? '{{ label }}' : ''">
         <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="{{ icon_path }}"/>
         </svg>
-        {{ label }}
+        <span x-show="!sidebarCollapsed || window.innerWidth < 1024">{{ label }}</span>
       </a>
       {% endfor %}
     </nav>
-    <div class="px-4 py-3 border-t border-gray-700 text-xs text-gray-500">v0.1.0</div>
+    <div x-show="!sidebarCollapsed" class="px-4 py-3 border-t border-gray-700 text-xs text-gray-500">v0.2.0</div>
   </aside>
 
   <!-- Main content -->
-  <div class="ml-56 flex-1 flex flex-col min-h-screen">
+  <div :class="sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-56'" class="flex-1 flex flex-col min-h-screen transition-all duration-200">
     <!-- Top bar -->
-    <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-3 flex items-center gap-6 sticky top-0 z-10 transition-colors">
+    <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-3 flex items-center gap-4 sm:gap-6 sticky top-0 z-10 transition-colors">
+      <!-- Mobile hamburger -->
+      <button @click="sidebarOpen = !sidebarOpen" class="lg:hidden text-gray-600 dark:text-gray-300">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/>
+        </svg>
+      </button>
+
       <div class="flex items-center gap-2">
-        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Client:</label>
+        <label class="text-sm font-medium text-gray-700 dark:text-gray-300 hidden sm:inline">Client:</label>
         <select x-model="activeClient" @change="setClient()"
                 class="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sap-500">
           <option value="">(none)</option>
@@ -64,7 +80,7 @@
           {% endfor %}
         </select>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 hidden sm:flex">
         <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Standard KB:</label>
         <button @click="toggleStdKb()"
                 :class="standardKb ? 'bg-sap-600' : 'bg-gray-300 dark:bg-gray-600'"
@@ -93,7 +109,7 @@
     </header>
 
     <!-- Page content -->
-    <main class="flex-1 p-6">
+    <main class="flex-1 p-4 sm:p-6">
       {% block content %}{% endblock %}
     </main>
   </div>
@@ -104,6 +120,8 @@
         activeClient: '{{ active_client or "" }}',
         standardKb: {{ 'true' if standard_kb_enabled else 'false' }},
         darkMode: localStorage.getItem('darkMode') === 'true',
+        sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true',
+        sidebarOpen: false,
         toast: '',
         toastType: 'success',
         init() {},

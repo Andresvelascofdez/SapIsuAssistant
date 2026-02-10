@@ -285,20 +285,77 @@ class KanbanRepository:
 
         return self.get_by_id(internal_id)
 
-    def list_tickets(self, status: str | None = None) -> list[Ticket]:
-        """List tickets, optionally filtered by status."""
+    def delete_ticket(self, internal_id: str) -> bool:
+        """Delete a ticket and its history. Returns True if deleted."""
         with sqlite3.connect(self.db_path) as conn:
-            if status:
-                rows = conn.execute(
-                    "SELECT id, ticket_id, title, status, priority, notes, links_json, tags_json, created_at, updated_at, closed_at FROM tickets WHERE status = ? ORDER BY created_at DESC",
-                    (status,)
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    "SELECT id, ticket_id, title, status, priority, notes, links_json, tags_json, created_at, updated_at, closed_at FROM tickets ORDER BY created_at DESC"
-                ).fetchall()
+            row = conn.execute("SELECT id FROM tickets WHERE id = ?", (internal_id,)).fetchone()
+            if not row:
+                return False
+            conn.execute("DELETE FROM ticket_history WHERE ticket_id = ?", (internal_id,))
+            conn.execute("DELETE FROM tickets WHERE id = ?", (internal_id,))
+            conn.commit()
+        return True
 
+    def list_tickets(
+        self,
+        status: str | None = None,
+        search: str | None = None,
+        priority: str | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[Ticket]:
+        """List tickets with optional filters, search and pagination."""
+        clauses = []
+        params: list = []
+
+        if status:
+            clauses.append("status = ?")
+            params.append(status)
+        if priority:
+            clauses.append("priority = ?")
+            params.append(priority)
+        if search:
+            clauses.append("(ticket_id LIKE ? OR title LIKE ? OR notes LIKE ?)")
+            like = f"%{search}%"
+            params.extend([like, like, like])
+
+        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        sql = f"SELECT id, ticket_id, title, status, priority, notes, links_json, tags_json, created_at, updated_at, closed_at FROM tickets{where} ORDER BY created_at DESC"
+
+        if limit is not None:
+            sql += " LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(sql, params).fetchall()
             return [Ticket(*r) for r in rows]
+
+    def count_tickets(
+        self,
+        status: str | None = None,
+        search: str | None = None,
+        priority: str | None = None,
+    ) -> int:
+        """Count tickets matching filters."""
+        clauses = []
+        params: list = []
+
+        if status:
+            clauses.append("status = ?")
+            params.append(status)
+        if priority:
+            clauses.append("priority = ?")
+            params.append(priority)
+        if search:
+            clauses.append("(ticket_id LIKE ? OR title LIKE ? OR notes LIKE ?)")
+            like = f"%{search}%"
+            params.extend([like, like, like])
+
+        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        sql = f"SELECT COUNT(*) FROM tickets{where}"
+
+        with sqlite3.connect(self.db_path) as conn:
+            return conn.execute(sql, params).fetchone()[0]
 
     def get_history(self, internal_id: str) -> list[TicketHistoryEntry]:
         """Get ticket status history."""
