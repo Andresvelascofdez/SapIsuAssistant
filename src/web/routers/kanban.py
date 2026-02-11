@@ -32,6 +32,17 @@ def _get_kanban_repo(state):
     return KanbanRepository(db_path, seed_columns=False)
 
 
+def _get_kanban_repo_for_client(state, client_code: str):
+    """Return a per-client KanbanRepository for an explicit client code."""
+    from src.kanban.storage.kanban_repository import KanbanRepository
+    if not client_code:
+        return None
+    db_path = state.data_root / "clients" / client_code / "kanban.sqlite"
+    if not db_path.parent.exists():
+        return None
+    return KanbanRepository(db_path, seed_columns=False)
+
+
 def _get_all_repos(state):
     from src.kanban.storage.kanban_repository import KanbanRepository
     repos = []
@@ -106,11 +117,18 @@ async def list_tickets(
 @router.post("/api/kanban/tickets")
 async def create_ticket(request: Request):
     state = get_state(request)
-    repo = _get_kanban_repo(state)
+    body = await request.json()
+
+    # Resolve client: explicit from body, or fall back to session
+    client_code = body.get("client_code", "").strip()
+    if client_code:
+        repo = _get_kanban_repo_for_client(state, client_code)
+    else:
+        repo = _get_kanban_repo(state)
+
     if not repo:
         return JSONResponse({"error": "No client selected."}, status_code=400)
 
-    body = await request.json()
     title = body.get("title", "").strip()
     if not title:
         return JSONResponse({"error": "Title is required."}, status_code=400)
@@ -124,7 +142,7 @@ async def create_ticket(request: Request):
         title=title,
         priority=body.get("priority", "MEDIUM"),
         notes=body.get("notes") or None,
-        status=body.get("status", default_status),
+        status=body.get("status") or default_status,
     )
     return _ticket_to_dict(ticket)
 

@@ -1,10 +1,24 @@
 # Changelog
 
+## v0.2.2 (2026-02-11)
+
+### Kanban - Creacion de tickets
+
+- **Boton "+" por columna**: Cada cabecera de columna muestra un boton "+" (hover) para crear tickets directamente en esa columna
+- **Cliente obligatorio**: El modal de creacion exige seleccionar un cliente del dropdown antes de crear
+- **client_code en body**: El backend acepta `client_code` explicito en el body del POST, con fallback al cliente de sesion
+- **Validacion de cliente**: Si el client_code no existe, retorna 400
+- **Status vacio → default**: Si status es cadena vacia, usa la primera columna como default
+
+### Tests
+
+- 82 tests (+5 nuevos): creacion con client_code explicito, fallback a sesion, cliente invalido, status explicito, status vacio
+
 ## v0.2.1 (2026-02-11)
 
 ### Assistant - Scope & Token Gating
 
-- **Scope-aware retrieval**: 3 opciones explicitas: General (solo kb_standard), Cliente (solo kb_<CLIENT>), Cliente + Standard (ambas colecciones)
+- **Scope-aware retrieval**: 3 opciones explicitas: General (solo kb*standard), Cliente (solo kb*<CLIENT>), Cliente + Standard (ambas colecciones)
 - **Token gating**: Si la busqueda no devuelve items validos, NO se llama al modelo OpenAI (ahorro de tokens). Se muestra mensaje con sugerencias
 - **Validacion APPROVED**: Solo items con status APPROVED en SQLite son considerados validos tras la busqueda en Qdrant
 - **Flag model_called**: Cada respuesta incluye un flag de auditoria (0/1) indicando si se invoco al modelo
@@ -27,16 +41,16 @@
 
 ### API - Nuevos Endpoints
 
-| Metodo | Ruta | Descripcion |
-|--------|------|-------------|
-| GET | `/api/chat/sessions` | Listar sesiones (con busqueda) |
-| POST | `/api/chat/sessions` | Crear sesion |
-| GET | `/api/chat/sessions/{id}/messages` | Mensajes de sesion |
-| PUT | `/api/chat/sessions/{id}/rename` | Renombrar sesion |
-| PUT | `/api/chat/sessions/{id}/pin` | Fijar/desfijar sesion |
-| DELETE | `/api/chat/sessions/{id}` | Eliminar sesion |
-| GET | `/api/chat/sessions/{id}/export` | Exportar (md/json) |
-| POST | `/api/chat/retention` | Configurar retencion |
+| Metodo | Ruta                               | Descripcion                    |
+| ------ | ---------------------------------- | ------------------------------ |
+| GET    | `/api/chat/sessions`               | Listar sesiones (con busqueda) |
+| POST   | `/api/chat/sessions`               | Crear sesion                   |
+| GET    | `/api/chat/sessions/{id}/messages` | Mensajes de sesion             |
+| PUT    | `/api/chat/sessions/{id}/rename`   | Renombrar sesion               |
+| PUT    | `/api/chat/sessions/{id}/pin`      | Fijar/desfijar sesion          |
+| DELETE | `/api/chat/sessions/{id}`          | Eliminar sesion                |
+| GET    | `/api/chat/sessions/{id}/export`   | Exportar (md/json)             |
+| POST   | `/api/chat/retention`              | Configurar retencion           |
 
 ### Tests
 

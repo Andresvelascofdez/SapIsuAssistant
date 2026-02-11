@@ -295,6 +295,88 @@ class TestKanbanAPI:
         assert history[1]["to_status"] == "TESTING"
 
 
+# ── Kanban: client_code in body + per-column creation ──
+
+
+class TestKanbanClientCodeInBody:
+    """Test that POST /api/kanban/tickets accepts client_code in body and status."""
+
+    @pytest.fixture
+    def client(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SAP_DATA_ROOT", str(tmp_path))
+        import src.web.dependencies as deps
+        monkeypatch.setattr(deps, "DATA_ROOT", tmp_path)
+        # Setup TWO client directories
+        from src.shared.client_manager import ClientManager
+        cm = ClientManager(tmp_path)
+        cm.register_client("AAA", "Client A")
+        cm.register_client("BBB", "Client B")
+
+        from src.web.app import app
+        from starlette.testclient import TestClient
+        c = TestClient(app)
+        # Set active client to AAA
+        c.post("/api/session/client", json={"code": "AAA"})
+        return c
+
+    def test_create_ticket_with_explicit_client_code(self, client):
+        """Ticket created in BBB's DB even though session is AAA."""
+        resp = client.post("/api/kanban/tickets", json={
+            "title": "Test in BBB",
+            "priority": "HIGH",
+            "client_code": "BBB",
+        })
+        assert resp.status_code == 200
+        ticket = resp.json()
+        assert ticket["title"] == "Test in BBB"
+
+        # Verify ticket is NOT in AAA's list (session client)
+        resp = client.get("/api/kanban/tickets")
+        data = resp.json()
+        aaa_titles = [t["title"] for t in data["tickets"]]
+        assert "Test in BBB" not in aaa_titles
+
+    def test_create_ticket_falls_back_to_session_client(self, client):
+        """Without client_code in body, falls back to session active client."""
+        resp = client.post("/api/kanban/tickets", json={
+            "title": "Test in AAA",
+        })
+        assert resp.status_code == 200
+        resp = client.get("/api/kanban/tickets")
+        assert resp.json()["total"] == 1
+        assert resp.json()["tickets"][0]["title"] == "Test in AAA"
+
+    def test_create_ticket_with_invalid_client_returns_400(self, client):
+        """Non-existent client code returns 400."""
+        resp = client.post("/api/kanban/tickets", json={
+            "title": "Bad client",
+            "client_code": "NONEXISTENT",
+        })
+        assert resp.status_code == 400
+
+    def test_create_ticket_with_explicit_status(self, client):
+        """Per-column creation sets status correctly."""
+        resp = client.post("/api/kanban/tickets", json={
+            "title": "In testing",
+            "client_code": "AAA",
+            "status": "TESTING",
+        })
+        assert resp.status_code == 200
+        ticket = resp.json()
+        assert ticket["status"] == "TESTING"
+
+    def test_create_ticket_empty_status_uses_default(self, client):
+        """Empty status string falls through to default (first column)."""
+        resp = client.post("/api/kanban/tickets", json={
+            "title": "Default status",
+            "client_code": "AAA",
+            "status": "",
+        })
+        assert resp.status_code == 200
+        ticket = resp.json()
+        assert ticket["status"] == "NO_ANALIZADO"
+
+
 # ── Session persistence ──
 
 
