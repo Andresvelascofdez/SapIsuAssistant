@@ -170,11 +170,20 @@ async def create_ticket(request: Request):
 @router.put("/api/kanban/tickets/{ticket_id}/move")
 async def move_ticket(ticket_id: str, request: Request):
     state = get_state(request)
+    body = await request.json()
+
+    # Resolve repo: session client, or explicit client_code from body
     repo = _get_kanban_repo(state)
+    if not repo:
+        client_code = body.get("client_code", "").strip()
+        if client_code:
+            repo, error = _get_kanban_repo_for_client(state, client_code)
+            if error:
+                return JSONResponse({"error": error}, status_code=400)
+
     if not repo:
         return JSONResponse({"error": "No client selected."}, status_code=400)
 
-    body = await request.json()
     new_status = body.get("status", "").strip()
     if not new_status:
         return JSONResponse({"error": "Status is required."}, status_code=400)

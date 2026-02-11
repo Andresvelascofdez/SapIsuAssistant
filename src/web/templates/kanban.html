@@ -448,8 +448,6 @@ function kanbanApp() {
       if (!this.selectedTicket) return;
       const tags = this.selectedTicketTagsStr.split(',').map(s => s.trim()).filter(Boolean);
       const links = this.selectedTicketLinksStr.split('\n').map(s => s.trim()).filter(Boolean);
-      const activeClient = '{{ active_client or "" }}';
-      const movingClient = this.selectedTicketClient && this.selectedTicketClient !== activeClient;
       const resp = await fetch('/api/kanban/tickets/' + this.selectedTicket.id, {
         method: 'PUT',
         headers: {'Content-Type': 'application/json'},
@@ -468,9 +466,6 @@ function kanbanApp() {
         const data = await resp.json().catch(() => ({}));
         alert('Error al guardar: ' + (data.error || resp.statusText));
         return;
-      }
-      if (movingClient) {
-        alert('Ticket movido al cliente ' + this.selectedTicketClient + '. Cambia al cliente destino para verlo.');
       }
       this.selectedTicket = null;
       await this.loadData();
@@ -586,7 +581,7 @@ function kanbanApp() {
             await fetch('/api/kanban/tickets/' + ticketId + '/move', {
               method: 'PUT',
               headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({status: targetCol}),
+              body: JSON.stringify({status: targetCol, client_code: '{{ active_client or "" }}'}),
             });
             await app.loadData();
           }
