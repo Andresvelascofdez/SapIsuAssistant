@@ -56,7 +56,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="SAP IS-U Assistant", version="0.2.2", lifespan=lifespan)
+app = FastAPI(title="SAP IS-U Assistant", version="0.2.3", lifespan=lifespan)
 app.add_middleware(SessionMiddleware, secret_key=_get_session_secret())
 app.mount("/static", StaticFiles(directory=_HERE / "static"), name="static")
 
