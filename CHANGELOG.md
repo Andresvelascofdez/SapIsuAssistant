@@ -1,8 +1,51 @@
 # Changelog
 
+## v0.2.1 (2026-02-11)
+
+### Assistant - Scope & Token Gating
+
+- **Scope-aware retrieval**: 3 opciones explicitas: General (solo kb_standard), Cliente (solo kb_<CLIENT>), Cliente + Standard (ambas colecciones)
+- **Token gating**: Si la busqueda no devuelve items validos, NO se llama al modelo OpenAI (ahorro de tokens). Se muestra mensaje con sugerencias
+- **Validacion APPROVED**: Solo items con status APPROVED en SQLite son considerados validos tras la busqueda en Qdrant
+- **Flag model_called**: Cada respuesta incluye un flag de auditoria (0/1) indicando si se invoco al modelo
+
+### Assistant - Retrieval Enhancements
+
+- **Filtro por tipo KB**: Selector en la UI para filtrar por tipo de item (Incident Pattern, Root Cause, Resolution, Verification Steps, Customizing, ABAP Tech Note, Glossary, Runbook)
+- **Ranking boost determinista**: Items cuyos tags o sap_objects coinciden con tokens de la pregunta reciben un boost de score (+0.05 por match)
+
+### Assistant - Chat History
+
+- **Sidebar de historial**: Panel lateral con listado de sesiones de chat, ordenadas por actividad reciente
+- **Sesiones persistentes**: Chats guardados en SQLite con mensajes, scope, cliente, timestamps
+- **Busqueda de historial**: Buscar sesiones por titulo o contenido de mensajes
+- **Pin de sesiones**: Fijar chats importantes para que no se eliminen con la retencion
+- **Renombrar sesiones**: Editar titulo de cualquier sesion desde el sidebar
+- **Exportar sesiones**: Exportar chat individual como Markdown o JSON
+- **Eliminar sesiones**: Borrar sesiones con confirmacion, cascade de mensajes
+- **Retencion configurable**: Limpieza automatica de sesiones antiguas no fijadas (7/15/30 dias). Se ejecuta al arrancar el servidor
+
+### API - Nuevos Endpoints
+
+| Metodo | Ruta | Descripcion |
+|--------|------|-------------|
+| GET | `/api/chat/sessions` | Listar sesiones (con busqueda) |
+| POST | `/api/chat/sessions` | Crear sesion |
+| GET | `/api/chat/sessions/{id}/messages` | Mensajes de sesion |
+| PUT | `/api/chat/sessions/{id}/rename` | Renombrar sesion |
+| PUT | `/api/chat/sessions/{id}/pin` | Fijar/desfijar sesion |
+| DELETE | `/api/chat/sessions/{id}` | Eliminar sesion |
+| GET | `/api/chat/sessions/{id}/export` | Exportar (md/json) |
+| POST | `/api/chat/retention` | Configurar retencion |
+
+### Tests
+
+- 77 tests de integracion y E2E cubriendo: token gating, scope isolation, Qdrant routing, type filter, ranking boost, chat sessions, retention, search, pin, rename, export, API endpoints
+
 ## v0.2.0 (2026-02-10)
 
 ### Visual
+
 - **Columnas adaptativas**: Las columnas Kanban se expanden para llenar el espacio disponible (min 260px, max 400px)
 - **Markdown en notas**: Las notas de los tickets se renderizan como Markdown (negritas, italicas, codigo) usando marked.js
 - **Sidebar colapsable**: El sidebar se puede colapsar a solo iconos con un boton. El estado se guarda en localStorage
@@ -13,6 +56,7 @@
 - **Tailwind compilado**: Se reemplazo el CDN de Tailwind por CSS compilado (carga mas rapida, funciona offline)
 
 ### Funcionalidad
+
 - **Eliminar tickets**: Boton "Eliminar" en el modal de detalle con confirmacion
 - **Filtrar por prioridad**: Selector de prioridad en la barra superior que filtra server-side
 - **Fechas relativas**: Cada card muestra "hace X dias" con la ultima modificacion. El modal muestra fecha de creacion y modificacion
@@ -25,6 +69,7 @@
 - **Paginacion server-side**: La API soporta parametros `limit` y `offset` para paginacion
 
 ### Backend
+
 - **Sesion persistente**: La secret key de sesion se genera una vez y se guarda en `data/.session_key`. Las sesiones sobreviven reinicios del servidor
 - **DELETE /api/kanban/tickets/{id}**: Nuevo endpoint para eliminar tickets
 - **GET /api/kanban/export-csv**: Nuevo endpoint que genera un CSV descargable
@@ -32,6 +77,7 @@
 - **Tags y links en PUT**: El endpoint de actualizar ticket ahora acepta `tags` y `links`
 
 ### Tests
+
 - 31 tests de integracion cubriendo: delete, search, pagination, priority filter, tags/links, export CSV, columns, history, session persistence
 
 ## v0.1.0
