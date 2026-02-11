@@ -224,9 +224,12 @@
         <div class="space-y-3">
           <div>
             <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Cliente</label>
-            <select disabled
-                    class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-100 opacity-70 cursor-not-allowed">
-              <option selected>{{ active_client or "Sin cliente" }}</option>
+            <select x-model="selectedTicketClient"
+                    class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+              <option value="" disabled>-- Seleccionar cliente --</option>
+              {% for c in clients %}
+              <option value="{{ c }}">{{ c }}</option>
+              {% endfor %}
             </select>
           </div>
           <div>
@@ -298,6 +301,7 @@ function kanbanApp() {
     selectedTicket: null,
     selectedTicketTagsStr: '',
     selectedTicketLinksStr: '',
+    selectedTicketClient: '{{ active_client or "" }}',
     newTicketTagsStr: '',
     newTicketLinksStr: '',
     ticketHistory: [],
@@ -432,6 +436,7 @@ function kanbanApp() {
       this.selectedTicket = {...ticket};
       this.selectedTicketTagsStr = (ticket.tags || []).join(', ');
       this.selectedTicketLinksStr = (ticket.links || []).join('\n');
+      this.selectedTicketClient = '{{ active_client or "" }}';
       // Load history
       try {
         const resp = await fetch('/api/kanban/tickets/' + ticket.id + '/history');
@@ -443,6 +448,8 @@ function kanbanApp() {
       if (!this.selectedTicket) return;
       const tags = this.selectedTicketTagsStr.split(',').map(s => s.trim()).filter(Boolean);
       const links = this.selectedTicketLinksStr.split('\n').map(s => s.trim()).filter(Boolean);
+      const activeClient = '{{ active_client or "" }}';
+      const movingClient = this.selectedTicketClient && this.selectedTicketClient !== activeClient;
       const resp = await fetch('/api/kanban/tickets/' + this.selectedTicket.id, {
         method: 'PUT',
         headers: {'Content-Type': 'application/json'},
@@ -454,12 +461,16 @@ function kanbanApp() {
           notes: this.selectedTicket.notes,
           tags: tags,
           links: links,
+          client_code: this.selectedTicketClient,
         }),
       });
       if (!resp.ok) {
         const data = await resp.json().catch(() => ({}));
         alert('Error al guardar: ' + (data.error || resp.statusText));
         return;
+      }
+      if (movingClient) {
+        alert('Ticket movido al cliente ' + this.selectedTicketClient + '. Cambia al cliente destino para verlo.');
       }
       this.selectedTicket = null;
       await this.loadData();
