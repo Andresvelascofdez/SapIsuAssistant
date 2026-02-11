@@ -113,6 +113,8 @@
                       }" x-text="ticket.priority"></span>
               </div>
               <div class="text-base font-bold text-gray-900 dark:text-white leading-snug" x-text="ticket.title"></div>
+              <div x-show="ticket.description"
+                   class="text-sm text-gray-600 dark:text-gray-300 mt-1 line-clamp-2" x-text="ticket.description"></div>
               <div x-show="ticket.notes"
                    class="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2 prose-sm"
                    x-html="renderMarkdown(ticket.notes)"></div>
@@ -155,6 +157,7 @@
           Columna: <span class="font-semibold" x-text="newTicket.status"></span>
         </div>
         <input x-model="newTicket.title" placeholder="Titulo" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        <textarea x-model="newTicket.description" placeholder="Descripcion (opcional)" rows="2" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
         <select x-model="newTicket.priority" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
           <option value="LOW">Low</option><option value="MEDIUM" selected>Medium</option>
           <option value="HIGH">High</option><option value="CRITICAL">Critical</option>
@@ -198,6 +201,10 @@
           <div>
             <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Titulo</label>
             <input x-model="selectedTicket.title" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+          </div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Descripcion</label>
+            <textarea x-model="selectedTicket.description" rows="2" placeholder="Descripcion del ticket" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
           </div>
           <div>
             <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Prioridad</label>
@@ -256,7 +263,7 @@ function kanbanApp() {
     selectedTicketTagsStr: '',
     selectedTicketLinksStr: '',
     ticketHistory: [],
-    newTicket: {title: '', priority: 'MEDIUM', notes: '', status: '', client_code: '{{ active_client or "" }}'},
+    newTicket: {title: '', description: '', priority: 'MEDIUM', notes: '', status: '', client_code: '{{ active_client or "" }}'},
     newColName: '',
     editingCol: null,
     editingColName: '',
@@ -373,7 +380,7 @@ function kanbanApp() {
         alert('Error al crear ticket: ' + (data.error || resp.statusText));
         return;
       }
-      this.newTicket = {title: '', priority: 'MEDIUM', notes: '', status: '', client_code: '{{ active_client or "" }}'};
+      this.newTicket = {title: '', description: '', priority: 'MEDIUM', notes: '', status: '', client_code: '{{ active_client or "" }}'};
       this.showNewModal = false;
       await this.loadData();
     },
@@ -398,6 +405,7 @@ function kanbanApp() {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
           title: this.selectedTicket.title,
+          description: this.selectedTicket.description,
           priority: this.selectedTicket.priority,
           notes: this.selectedTicket.notes,
           tags: tags,
