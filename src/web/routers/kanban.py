@@ -268,9 +268,13 @@ async def update_ticket(ticket_id: str, request: Request):
 
 
 @router.get("/api/kanban/tickets/{ticket_id}/history")
-async def ticket_history(ticket_id: str, request: Request):
+async def ticket_history(ticket_id: str, request: Request, client_code: str = Query(default=None)):
     state = get_state(request)
     repo = _get_kanban_repo(state)
+    if not repo and client_code:
+        repo, error = _get_kanban_repo_for_client(state, client_code.strip())
+        if error:
+            return JSONResponse({"error": error}, status_code=400)
     if not repo:
         return JSONResponse({"error": "No client selected."}, status_code=400)
 
@@ -398,9 +402,13 @@ async def import_csv(request: Request):
 
 
 @router.delete("/api/kanban/tickets/{ticket_id}")
-async def delete_ticket(ticket_id: str, request: Request):
+async def delete_ticket(ticket_id: str, request: Request, client_code: str = Query(default=None)):
     state = get_state(request)
     repo = _get_kanban_repo(state)
+    if not repo and client_code:
+        repo, error = _get_kanban_repo_for_client(state, client_code.strip())
+        if error:
+            return JSONResponse({"error": error}, status_code=400)
     if not repo:
         return JSONResponse({"error": "No client selected."}, status_code=400)
 

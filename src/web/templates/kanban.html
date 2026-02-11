@@ -440,7 +440,8 @@ function kanbanApp() {
       this.selectedTicketClient = ticket.client_code || '{{ active_client or "" }}';
       // Load history
       try {
-        const resp = await fetch('/api/kanban/tickets/' + ticket.id + '/history');
+        const cc = this.selectedTicketClient ? '?client_code=' + encodeURIComponent(this.selectedTicketClient) : '';
+        const resp = await fetch('/api/kanban/tickets/' + ticket.id + '/history' + cc);
         this.ticketHistory = await resp.json();
       } catch(e) { this.ticketHistory = []; }
     },
@@ -476,7 +477,8 @@ function kanbanApp() {
       if (!this.selectedTicket) return;
       const name = this.selectedTicket.ticket_id || this.selectedTicket.title;
       if (!confirm('Eliminar ticket "' + name + '"? Esta accion no se puede deshacer.')) return;
-      const resp = await fetch('/api/kanban/tickets/' + this.selectedTicket.id, {method: 'DELETE'});
+      const cc = this.selectedTicketClient ? '?client_code=' + encodeURIComponent(this.selectedTicketClient) : '';
+      const resp = await fetch('/api/kanban/tickets/' + this.selectedTicket.id + cc, {method: 'DELETE'});
       if (!resp.ok) {
         const data = await resp.json().catch(() => ({}));
         alert('Error al eliminar: ' + (data.error || resp.statusText));
