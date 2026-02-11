@@ -656,6 +656,46 @@ class TestMoveTicketBetweenClients:
         resp = client.get("/api/kanban/tickets")
         assert resp.json()["tickets"][0]["status"] == "EN_PROGRESO"
 
+    def test_history_without_session_client(self, client):
+        """GET /history with client_code query param works without session."""
+        resp = client.post("/api/kanban/tickets", json={
+            "title": "History test", "client_code": "AAA",
+        })
+        assert resp.status_code == 200
+        ticket = resp.json()
+
+        # Clear session
+        client.post("/api/session/client", json={"code": ""})
+
+        resp = client.get(
+            f"/api/kanban/tickets/{ticket['id']}/history",
+            params={"client_code": "AAA"},
+        )
+        assert resp.status_code == 200, f"History failed: {resp.json()}"
+        assert isinstance(resp.json(), list)
+
+    def test_delete_without_session_client(self, client):
+        """DELETE with client_code query param works without session."""
+        resp = client.post("/api/kanban/tickets", json={
+            "title": "Delete test", "client_code": "AAA",
+        })
+        assert resp.status_code == 200
+        ticket = resp.json()
+
+        # Clear session
+        client.post("/api/session/client", json={"code": ""})
+
+        resp = client.delete(
+            f"/api/kanban/tickets/{ticket['id']}",
+            params={"client_code": "AAA"},
+        )
+        assert resp.status_code == 200, f"Delete failed: {resp.json()}"
+
+        # Verify gone
+        client.post("/api/session/client", json={"code": "AAA"})
+        resp = client.get("/api/kanban/tickets")
+        assert resp.json()["total"] == 0
+
 
 # ── Session persistence ──
 
