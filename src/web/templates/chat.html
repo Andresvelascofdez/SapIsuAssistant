@@ -1,9 +1,59 @@
 {% extends "base.html" %}
 {% set active_tab = "chat" %}
 {% block content %}
-<div x-data="chatApp()" class="flex gap-6 h-[calc(100vh-8rem)]">
+<div x-data="chatApp()" x-init="initChat()" class="flex gap-4 h-[calc(100vh-8rem)]">
 
-  <!-- Chat panel -->
+  <!-- Chat history sidebar -->
+  <div class="w-64 flex-shrink-0 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col">
+    <div class="px-3 py-3 border-b border-gray-200 dark:border-gray-700 space-y-2">
+      <button @click="newChat()"
+              class="w-full bg-sap-600 hover:bg-sap-700 text-white text-sm font-medium px-3 py-2 rounded-lg transition flex items-center justify-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+        New Chat
+      </button>
+      <input x-model="historySearch" @input.debounce.300ms="loadSessions()"
+             placeholder="Search chats..."
+             class="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-sap-500">
+    </div>
+    <div class="flex-1 overflow-y-auto">
+      <template x-for="s in sessions" :key="s.session_id">
+        <div @click="loadSession(s.session_id)"
+             :class="activeSessionId === s.session_id ? 'bg-sap-50 dark:bg-sap-900/30 border-l-2 border-sap-600' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'"
+             class="px-3 py-2.5 cursor-pointer border-b border-gray-100 dark:border-gray-700/50 group relative">
+          <div class="flex items-center gap-1">
+            <template x-if="s.is_pinned">
+              <svg class="w-3 h-3 text-sap-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.617 1.738 5.42a1 1 0 01-.285 1.05A3.989 3.989 0 0115 15a3.989 3.989 0 01-2.667-1.018 1 1 0 01-.285-1.05l1.715-5.349L11 6.477V16h2a1 1 0 110 2H7a1 1 0 110-2h2V6.477L6.237 7.582l1.715 5.349a1 1 0 01-.285 1.05A3.989 3.989 0 015 15a3.989 3.989 0 01-2.667-1.018 1 1 0 01-.285-1.05l1.738-5.42-1.233-.617a1 1 0 01.894-1.79l1.599.8L9 4.323V3a1 1 0 011-1z"/></svg>
+            </template>
+            <span class="text-xs font-medium text-gray-800 dark:text-gray-200 truncate flex-1" x-text="s.title"></span>
+          </div>
+          <div class="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 flex items-center gap-1">
+            <span x-text="s.scope"></span>
+            <template x-if="s.client_code"><span x-text="'· ' + s.client_code"></span></template>
+          </div>
+          <!-- Session actions (hover) -->
+          <div class="absolute right-1 top-1 hidden group-hover:flex gap-0.5">
+            <button @click.stop="pinSession(s)" class="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600" :title="s.is_pinned ? 'Unpin' : 'Pin'">
+              <svg class="w-3 h-3" :class="s.is_pinned ? 'text-sap-500' : 'text-gray-400'" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.617 1.738 5.42a1 1 0 01-.285 1.05A3.989 3.989 0 0115 15a3.989 3.989 0 01-2.667-1.018 1 1 0 01-.285-1.05l1.715-5.349L11 6.477V16h2a1 1 0 110 2H7a1 1 0 110-2h2V6.477L6.237 7.582l1.715 5.349a1 1 0 01-.285 1.05A3.989 3.989 0 015 15a3.989 3.989 0 01-2.667-1.018 1 1 0 01-.285-1.05l1.738-5.42-1.233-.617a1 1 0 01.894-1.79l1.599.8L9 4.323V3a1 1 0 011-1z"/></svg>
+            </button>
+            <button @click.stop="startRename(s)" class="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600" title="Rename">
+              <svg class="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
+            </button>
+            <button @click.stop="exportSession(s.session_id, 'md')" class="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600" title="Export MD">
+              <svg class="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+            </button>
+            <button @click.stop="deleteSession(s.session_id)" class="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600" title="Delete">
+              <svg class="w-3 h-3 text-red-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+            </button>
+          </div>
+        </div>
+      </template>
+      <template x-if="sessions.length === 0">
+        <p class="text-xs text-gray-400 dark:text-gray-500 italic p-3">No chat sessions yet.</p>
+      </template>
+    </div>
+  </div>
+
+  <!-- Main chat area -->
   <div class="flex-1 flex flex-col bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
     <!-- Messages -->
     <div class="flex-1 overflow-y-auto p-6 space-y-4" x-ref="messages">
@@ -13,6 +63,9 @@
             ? 'bg-sap-600 text-white rounded-2xl rounded-br-md px-4 py-3 max-w-[70%]'
             : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-2xl rounded-bl-md px-4 py-3 max-w-[70%]'">
             <div class="text-sm whitespace-pre-wrap" x-text="msg.text"></div>
+            <template x-if="msg.role === 'assistant' && msg.model_called !== undefined">
+              <div class="mt-1 text-[10px] opacity-60" x-text="msg.model_called ? 'Model called' : 'Model not called (no results)'"></div>
+            </template>
           </div>
         </div>
       </template>
@@ -26,13 +79,31 @@
       </div>
     </div>
 
-    <!-- Input -->
+    <!-- Input area -->
     <div class="border-t border-gray-200 dark:border-gray-700 p-4">
-      <div class="flex gap-3">
-        <select x-model="effort" class="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm w-28">
+      <div class="flex gap-2 mb-2 flex-wrap">
+        <select x-model="scope" class="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-2 py-1 text-xs">
+          <option value="general">General</option>
+          <option value="client">Client</option>
+          <option value="client_plus_standard">Client + Standard</option>
+        </select>
+        <select x-model="typeFilter" class="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-2 py-1 text-xs">
+          <option value="">All Types</option>
+          <option value="INCIDENT_PATTERN">Incident Pattern</option>
+          <option value="ROOT_CAUSE">Root Cause</option>
+          <option value="RESOLUTION">Resolution</option>
+          <option value="VERIFICATION_STEPS">Verification Steps</option>
+          <option value="CUSTOMIZING">Customizing</option>
+          <option value="ABAP_TECH_NOTE">ABAP Tech Note</option>
+          <option value="GLOSSARY">Glossary</option>
+          <option value="RUNBOOK">Runbook</option>
+        </select>
+        <select x-model="effort" class="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-2 py-1 text-xs">
           <option value="high">High</option>
           <option value="xhigh">X-High</option>
         </select>
+      </div>
+      <div class="flex gap-3">
         <input x-model="question" @keydown.enter="send()"
                placeholder="Ask about SAP IS-U..."
                class="flex-1 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-sap-500 focus:border-sap-500"
@@ -46,11 +117,15 @@
   </div>
 
   <!-- Sources panel -->
-  <div class="w-80 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col">
+  <div class="w-72 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col">
     <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-      <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">Sources</h3>
+      <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">Sources & Audit</h3>
     </div>
     <div class="flex-1 overflow-y-auto p-4 space-y-3">
+      <!-- Model called indicator -->
+      <div class="text-xs px-2 py-1 rounded" :class="lastModelCalled ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'" x-show="lastModelCalled !== null">
+        <span x-text="lastModelCalled ? 'Model was called' : 'Model NOT called (no results)'"></span>
+      </div>
       <template x-if="sources.length === 0">
         <p class="text-xs text-gray-400 dark:text-gray-500 italic">Sources will appear here after a question is answered.</p>
       </template>
@@ -69,28 +144,108 @@
   </div>
 </div>
 
+<!-- Rename modal -->
+<div x-show="renameModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" x-transition>
+  <div class="bg-white dark:bg-gray-800 rounded-xl p-6 w-96 shadow-xl">
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">Rename Chat</h3>
+    <input x-model="renameTitle" @keydown.enter="confirmRename()" class="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+    <div class="flex justify-end gap-2 mt-4">
+      <button @click="renameModal = false" class="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Cancel</button>
+      <button @click="confirmRename()" class="px-4 py-2 text-sm bg-sap-600 text-white rounded-lg hover:bg-sap-700">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 function chatApp() {
   return {
     messages: [],
     sources: [],
+    sessions: [],
     question: '',
     effort: 'high',
+    scope: '{{ "client" if active_client else "general" }}',
+    typeFilter: '',
     thinking: false,
+    activeSessionId: null,
+    historySearch: '',
+    lastModelCalled: null,
+    renameModal: false,
+    renameTitle: '',
+    renameSessionId: null,
+
+    async initChat() {
+      await this.loadSessions();
+      if (this.sessions.length > 0) {
+        await this.loadSession(this.sessions[0].session_id);
+      }
+    },
+
+    async loadSessions() {
+      const params = this.historySearch ? `?search=${encodeURIComponent(this.historySearch)}` : '';
+      const resp = await fetch(`/api/chat/sessions${params}`);
+      this.sessions = await resp.json();
+    },
+
+    async newChat() {
+      const resp = await fetch('/api/chat/sessions', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          scope: this.scope,
+          client_code: this.scope !== 'general' ? '{{ active_client or "" }}' : null,
+          title: 'New Chat',
+        }),
+      });
+      const session = await resp.json();
+      this.activeSessionId = session.session_id;
+      this.messages = [];
+      this.sources = [];
+      this.lastModelCalled = null;
+      await this.loadSessions();
+    },
+
+    async loadSession(sessionId) {
+      this.activeSessionId = sessionId;
+      const resp = await fetch(`/api/chat/sessions/${sessionId}/messages`);
+      const msgs = await resp.json();
+      this.messages = msgs.map(m => ({
+        role: m.role,
+        text: m.content,
+        model_called: m.model_called,
+      }));
+      this.sources = [];
+      this.lastModelCalled = null;
+      this.$nextTick(() => { this.$refs.messages.scrollTop = this.$refs.messages.scrollHeight; });
+    },
+
     async send() {
       const q = this.question.trim();
       if (!q || this.thinking) return;
+
+      // Auto-create session if none active
+      if (!this.activeSessionId) {
+        await this.newChat();
+      }
+
       this.messages.push({role: 'user', text: q});
       this.question = '';
       this.thinking = true;
       this.sources = [];
+      this.lastModelCalled = null;
       this.$nextTick(() => { this.$refs.messages.scrollTop = this.$refs.messages.scrollHeight; });
 
       try {
         const resp = await fetch('/api/chat/send', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({question: q, reasoning_effort: this.effort}),
+          body: JSON.stringify({
+            question: q,
+            reasoning_effort: this.effort,
+            scope: this.scope,
+            type_filter: this.typeFilter || null,
+            session_id: this.activeSessionId,
+          }),
         });
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
@@ -103,11 +258,6 @@ function chatApp() {
           const lines = buffer.split('\n');
           buffer = lines.pop();
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const raw = line.slice(6);
-              // find event type from preceding event line
-              // SSE format: event: X\ndata: Y
-            }
             if (line.startsWith('event: ')) {
               this._lastEvent = line.slice(7).trim();
             }
@@ -117,8 +267,13 @@ function chatApp() {
               try {
                 const data = JSON.parse(raw);
                 if (this._lastEvent === 'answer') {
-                  this.messages.push({role: 'assistant', text: data.answer});
+                  this.messages.push({
+                    role: 'assistant',
+                    text: data.answer,
+                    model_called: data.model_called,
+                  });
                   this.sources = data.sources || [];
+                  this.lastModelCalled = data.model_called;
                 } else if (this._lastEvent === 'error') {
                   this.messages.push({role: 'assistant', text: data.message});
                 }
@@ -130,8 +285,51 @@ function chatApp() {
         this.messages.push({role: 'assistant', text: 'Connection error: ' + e.message});
       }
       this.thinking = false;
+      await this.loadSessions();
       this.$nextTick(() => { this.$refs.messages.scrollTop = this.$refs.messages.scrollHeight; });
     },
+
+    async pinSession(s) {
+      await fetch(`/api/chat/sessions/${s.session_id}/pin`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({pinned: !s.is_pinned}),
+      });
+      await this.loadSessions();
+    },
+
+    startRename(s) {
+      this.renameSessionId = s.session_id;
+      this.renameTitle = s.title;
+      this.renameModal = true;
+    },
+
+    async confirmRename() {
+      if (!this.renameTitle.trim()) return;
+      await fetch(`/api/chat/sessions/${this.renameSessionId}/rename`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({title: this.renameTitle.trim()}),
+      });
+      this.renameModal = false;
+      await this.loadSessions();
+    },
+
+    async exportSession(sessionId, fmt) {
+      window.open(`/api/chat/sessions/${sessionId}/export?format=${fmt}`, '_blank');
+    },
+
+    async deleteSession(sessionId) {
+      if (!confirm('Delete this chat session?')) return;
+      await fetch(`/api/chat/sessions/${sessionId}`, {method: 'DELETE'});
+      if (this.activeSessionId === sessionId) {
+        this.activeSessionId = null;
+        this.messages = [];
+        this.sources = [];
+      }
+      await this.loadSessions();
+    },
+
     _lastEvent: '',
   }
 }

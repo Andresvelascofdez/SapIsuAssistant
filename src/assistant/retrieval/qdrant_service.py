@@ -8,7 +8,9 @@ from typing import Optional
 from uuid import UUID
 
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, PointStruct, VectorParams
+from qdrant_client.models import (
+    Distance, FieldCondition, Filter, MatchValue, PointStruct, VectorParams,
+)
 
 from src.assistant.storage.kb_repository import KBItemRepository
 from src.assistant.storage.models import KBItem
@@ -36,25 +38,9 @@ class QdrantService:
     DISTANCE = Distance.COSINE
 
     def __init__(self, qdrant_url: str = "http://localhost:6333"):
-        """
-        Initialize Qdrant service.
-
-        Args:
-            qdrant_url: Qdrant server URL
-        """
         self.client = QdrantClient(url=qdrant_url)
 
     def _get_collection_name(self, client_scope: str, client_code: Optional[str]) -> str:
-        """
-        Get collection name per PLAN.md section 4.1.
-
-        Args:
-            client_scope: "standard" or "client"
-            client_code: Client code (required if scope="client")
-
-        Returns:
-            Collection name
-        """
         if client_scope == "standard":
             return "kb_standard"
         elif client_scope == "client":
@@ -65,10 +51,6 @@ class QdrantService:
             raise ValueError(f"Invalid client_scope: {client_scope}")
 
     def ensure_collection_exists(self, client_scope: str, client_code: Optional[str]):
-        """
-        Create collection if it doesn't exist per PLAN.md section 4.1.
-        Validates vector dimensions match on existing collections.
-        """
         collection_name = self._get_collection_name(client_scope, client_code)
 
         if self.client.collection_exists(collection_name):
@@ -95,18 +77,6 @@ class QdrantService:
             )
 
     def upsert_kb_item(self, kb_item: KBItem, embedding: list[float]):
-        """
-        Upsert KB item into Qdrant per PLAN.md section 4.5.
-
-        Only APPROVED items should be indexed per PLAN.md section 4.5.
-
-        Args:
-            kb_item: KB item to index
-            embedding: Vector embedding (3072 dimensions)
-
-        Raises:
-            ValueError: If item is not APPROVED
-        """
         if kb_item.status != "APPROVED":
             raise ValueError(f"Only APPROVED items can be indexed, got status: {kb_item.status}")
 
@@ -114,11 +84,8 @@ class QdrantService:
             raise ValueError(f"Embedding must be {self.VECTOR_SIZE} dimensions, got {len(embedding)}")
 
         collection_name = self._get_collection_name(kb_item.client_scope, kb_item.client_code)
-
-        # Ensure collection exists
         self.ensure_collection_exists(kb_item.client_scope, kb_item.client_code)
 
-        # Build payload per PLAN.md section 4.4
         payload = {
             "kb_id": kb_item.kb_id,
             "type": kb_item.type,
@@ -131,7 +98,6 @@ class QdrantService:
             "updated_at": kb_item.updated_at,
         }
 
-        # Point ID = kb_id per PLAN.md section 4.3
         point = PointStruct(
             id=kb_item.kb_id,
             vector=embedding,
@@ -146,24 +112,20 @@ class QdrantService:
     def search(
         self,
         query_embedding: list[float],
-        client_scope: str,
-        client_code: Optional[str],
+        scope: str,
+        client_code: Optional[str] = None,
         limit: int = 8,
-        include_standard: bool = True,
+        type_filter: Optional[str] = None,
     ) -> list[tuple[str, float]]:
         """
-        Search for KB items per PLAN.md section 4.6.
-
-        Query rules per PLAN.md section 4.6:
-        - Retrieval always queries kb_standard (if enabled) + kb_<ACTIVE_CLIENT>
-        - Never query other client collections
+        Search for KB items using explicit scope.
 
         Args:
             query_embedding: Query vector (3072 dimensions)
-            client_scope: "standard" or "client"
-            client_code: Active client code (required if scope="client")
-            limit: Number of results (default 8 per PLAN.md section 10.1)
-            include_standard: Whether to include standard KB (default True)
+            scope: "general" | "client" | "client_plus_standard"
+            client_code: Active client code (required if scope involves client)
+            limit: Number of results (default 8)
+            type_filter: Optional KB item type filter (e.g. "INCIDENT_PATTERN")
 
         Returns:
             List of (kb_id, score) tuples
@@ -171,34 +133,44 @@ class QdrantService:
         if len(query_embedding) != self.VECTOR_SIZE:
             raise ValueError(f"Embedding must be {self.VECTOR_SIZE} dimensions")
 
+        # Build optional Qdrant filter for type
+        query_filter = None
+        if type_filter:
+            query_filter = Filter(
+                must=[FieldCondition(key="type", match=MatchValue(value=type_filter))]
+            )
+
         results = []
 
-        # Query standard collection if enabled and exists
-        if include_standard:
-            standard_collection = "kb_standard"
-            if self.client.collection_exists(standard_collection):
-                standard_results = self.client.search(
-                    collection_name=standard_collection,
+        # Determine which collections to query based on scope
+        query_standard = scope in ("general", "client_plus_standard")
+        query_client = scope in ("client", "client_plus_standard")
+
+        if query_standard:
+            if self.client.collection_exists("kb_standard"):
+                hits = self.client.search(
+                    collection_name="kb_standard",
                     query_vector=query_embedding,
+                    query_filter=query_filter,
                     limit=limit,
                 )
                 results.extend([
                     (hit.payload["kb_id"], hit.score)
-                    for hit in standard_results
+                    for hit in hits
                 ])
 
-        # Query client collection if in client scope
-        if client_scope == "client" and client_code:
-            client_collection = self._get_collection_name(client_scope, client_code)
+        if query_client and client_code:
+            client_collection = f"kb_{client_code.upper()}"
             if self.client.collection_exists(client_collection):
-                client_results = self.client.search(
+                hits = self.client.search(
                     collection_name=client_collection,
                     query_vector=query_embedding,
+                    query_filter=query_filter,
                     limit=limit,
                 )
                 results.extend([
                     (hit.payload["kb_id"], hit.score)
-                    for hit in client_results
+                    for hit in hits
                 ])
 
         # Sort by score descending and limit
@@ -206,12 +178,6 @@ class QdrantService:
         return results[:limit]
 
     def delete_kb_item(self, kb_item: KBItem):
-        """
-        Delete KB item from Qdrant.
-
-        Args:
-            kb_item: KB item to delete
-        """
         collection_name = self._get_collection_name(kb_item.client_scope, kb_item.client_code)
 
         if self.client.collection_exists(collection_name):

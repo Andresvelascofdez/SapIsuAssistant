@@ -20,6 +20,12 @@ Aplicacion web para gestion de conocimiento SAP IS-U con IA y seguimiento operat
 - Sintesis estructurada via OpenAI GPT
 - Chat con streaming SSE y trazabilidad de fuentes
 - Knowledge base aislada por cliente + base estandar compartida
+- **Scope-aware retrieval**: General / Cliente / Cliente + Standard
+- **Token gating**: No llama al modelo si no hay resultados (ahorro de tokens)
+- **Filtro por tipo KB**: Filtrar por Incident Pattern, Root Cause, Resolution, etc.
+- **Ranking boost**: Boost determinista por coincidencia de tags/sap_objects
+- **Historial de chat**: Sidebar con sesiones persistentes, busqueda, pin, renombrar, exportar (MD/JSON)
+- **Retencion configurable**: Limpieza automatica de sesiones antiguas (7/15/30 dias)
 
 ### Review
 - Workflow de aprobacion de items de conocimiento
@@ -117,9 +123,10 @@ src/
     chat/
       chat_service.py   # Servicio RAG (embedding, retrieval, respuesta)
     storage/
-      models.py         # Modelos de datos (KBItem, Ingestion)
+      models.py         # Modelos de datos (KBItem, Ingestion, ChatSession, ChatMessage)
       kb_repository.py  # Repositorio SQLite de items KB
       ingestion_repository.py  # Repositorio de ingestas
+      chat_repository.py  # Repositorio de sesiones y mensajes de chat
   kanban/               # Modulo de seguimiento operativo
     storage/
       kanban_repository.py  # Repositorio SQLite (tickets, columnas, historial)
@@ -143,6 +150,7 @@ Toda la informacion esta fisicamente separada por cliente:
 data/
   app.sqlite                      # Config global (clientes registrados)
   kanban_global.sqlite            # Columnas Kanban (compartidas)
+  chat_history.sqlite             # Historial de chat (sesiones y mensajes)
   standard/
     assistant_kb.sqlite           # Knowledge base estandar
     uploads/
@@ -176,6 +184,14 @@ data/
 |--------|------|-------------|
 | GET | `/chat` | Pagina de chat |
 | POST | `/api/chat/send` | Enviar pregunta (SSE stream) |
+| GET | `/api/chat/sessions` | Listar sesiones (con busqueda) |
+| POST | `/api/chat/sessions` | Crear sesion |
+| GET | `/api/chat/sessions/{id}/messages` | Mensajes de sesion |
+| PUT | `/api/chat/sessions/{id}/rename` | Renombrar sesion |
+| PUT | `/api/chat/sessions/{id}/pin` | Fijar/desfijar sesion |
+| DELETE | `/api/chat/sessions/{id}` | Eliminar sesion |
+| GET | `/api/chat/sessions/{id}/export` | Exportar (md/json) |
+| POST | `/api/chat/retention` | Configurar retencion |
 | GET | `/ingest` | Pagina de ingesta |
 | POST | `/api/ingest/text` | Ingestar texto |
 | POST | `/api/ingest/file` | Subir PDF/DOCX |

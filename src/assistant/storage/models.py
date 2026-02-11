@@ -69,3 +69,35 @@ class Ingestion:
     reasoning_effort: str
     created_at: str
     updated_at: str
+
+
+class ChatScope(str, Enum):
+    """Chat retrieval scope."""
+    GENERAL = "general"
+    CLIENT = "client"
+    CLIENT_PLUS_STANDARD = "client_plus_standard"
+
+
+@dataclass
+class ChatSession:
+    """Chat session entity for history persistence."""
+    session_id: str
+    scope: str  # general | client | client_plus_standard
+    client_code: Optional[str]
+    title: str
+    is_pinned: int  # 0/1
+    created_at: str
+    updated_at: str
+    last_message_at: str
+
+
+@dataclass
+class ChatMessage:
+    """Chat message entity for history persistence."""
+    message_id: str
+    session_id: str
+    role: str  # user | assistant
+    content: str
+    created_at: str
+    used_kb_items_json: str  # JSON list of kb_ids/titles used
+    model_called: int  # 0/1

@@ -24,6 +24,7 @@ def get_state(request: Request) -> AppState:
         active_client_code=session.get("active_client_code"),
         standard_kb_enabled=session.get("standard_kb_enabled", True),
         qdrant_url=session.get("qdrant_url", "http://localhost:6333"),
+        chat_retention_days=session.get("chat_retention_days", 30),
     )
 
 
@@ -40,6 +41,13 @@ def get_client_manager() -> ClientManager:
     return ClientManager(DATA_ROOT)
 
 
+def get_chat_repository():
+    """Get ChatRepository instance for global chat history."""
+    from src.assistant.storage.chat_repository import ChatRepository
+    DATA_ROOT.mkdir(parents=True, exist_ok=True)
+    return ChatRepository(DATA_ROOT / "chat_history.sqlite")
+
+
 def get_template_context(request: Request) -> dict:
     """Build common template context with nav state."""
     state = get_state(request)
@@ -51,4 +59,5 @@ def get_template_context(request: Request) -> dict:
         "standard_kb_enabled": state.standard_kb_enabled,
         "qdrant_url": state.qdrant_url,
         "clients": [c.code for c in clients],
+        "chat_retention_days": state.chat_retention_days,
     }

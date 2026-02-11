@@ -48,6 +48,7 @@ credentials.json
 # OS
 .DS_Store
 Thumbs.db
+nul
 
 # Temporary files
 tmp*
@@ -61,3 +62,6 @@ notes.*
 
 # Qdrant data is in docker volume, but if local:
 qdrant_storage/
+
+# Screenshots (local only)
+screenshots/
