@@ -250,6 +250,7 @@ class KanbanRepository:
         self,
         internal_id: str,
         title: str | None = None,
+        ticket_id: str | None = None,
         description: str | None = None,
         priority: str | None = None,
         notes: str | None = None,
@@ -266,6 +267,9 @@ class KanbanRepository:
         if title is not None:
             updates.append("title = ?")
             params.append(title)
+        if ticket_id is not None:
+            updates.append("ticket_id = ?")
+            params.append(ticket_id)
         if description is not None:
             updates.append("description = ?")
             params.append(description)

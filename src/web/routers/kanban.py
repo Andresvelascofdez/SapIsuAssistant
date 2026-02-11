@@ -157,6 +157,7 @@ async def create_ticket(request: Request):
 
     ticket = repo.create_ticket(
         title=title,
+        ticket_id=body.get("ticket_id") or None,
         description=body.get("description") or None,
         priority=body.get("priority", "MEDIUM"),
         notes=body.get("notes") or None,
@@ -195,6 +196,7 @@ async def update_ticket(ticket_id: str, request: Request):
     ticket = repo.update_ticket(
         ticket_id,
         title=body.get("title"),
+        ticket_id=body.get("ticket_id"),
         description=body.get("description"),
         priority=body.get("priority"),
         notes=body.get("notes"),

@@ -156,6 +156,7 @@
         <div x-show="newTicket.status" class="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 px-3 py-1.5 rounded-lg">
           Columna: <span class="font-semibold" x-text="newTicket.status"></span>
         </div>
+        <input x-model="newTicket.ticket_id" placeholder="ID Tarea (ej: INC-001)" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-mono bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
         <input x-model="newTicket.title" placeholder="Titulo" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
         <textarea x-model="newTicket.description" placeholder="Descripcion (opcional)" rows="2" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
         <select x-model="newTicket.priority" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
@@ -196,7 +197,12 @@
       </div>
       <template x-if="selectedTicket">
         <div class="space-y-3">
-          <div x-show="selectedTicket.ticket_id" class="text-sm font-mono font-bold text-green-700 dark:text-green-400" x-text="selectedTicket.ticket_id"></div>
+          <div class="flex items-center gap-3">
+            <div class="flex-1">
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">ID Tarea</label>
+              <input x-model="selectedTicket.ticket_id" placeholder="ID Tarea (ej: INC-001)" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-mono font-bold text-green-700 dark:text-green-400 bg-white dark:bg-gray-700">
+            </div>
+          </div>
           <div class="text-xs text-gray-400 dark:text-gray-500" x-text="'Creado: ' + formatDate(selectedTicket.created_at) + '  |  Modificado: ' + timeAgo(selectedTicket.updated_at)"></div>
           <div>
             <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Titulo</label>
@@ -263,7 +269,7 @@ function kanbanApp() {
     selectedTicketTagsStr: '',
     selectedTicketLinksStr: '',
     ticketHistory: [],
-    newTicket: {title: '', description: '', priority: 'MEDIUM', notes: '', status: '', client_code: '{{ active_client or "" }}'},
+    newTicket: {ticket_id: '', title: '', description: '', priority: 'MEDIUM', notes: '', status: '', client_code: '{{ active_client or "" }}'},
     newColName: '',
     editingCol: null,
     editingColName: '',
@@ -405,6 +411,7 @@ function kanbanApp() {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
           title: this.selectedTicket.title,
+          ticket_id: this.selectedTicket.ticket_id,
           description: this.selectedTicket.description,
           priority: this.selectedTicket.priority,
           notes: this.selectedTicket.notes,
