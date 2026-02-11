@@ -139,7 +139,7 @@
 
   <!-- New ticket modal -->
   <div x-show="showNewModal" x-transition class="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-96 max-w-[90vw] p-6" @click.outside="showNewModal = false; newTicket.status = ''">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-[540px] max-w-[95vw] max-h-[90vh] overflow-y-auto p-6" @click.outside="showNewModal = false; newTicket.status = ''">
       <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Nuevo Ticket</h3>
       <div class="space-y-3">
         <div>
@@ -156,14 +156,39 @@
         <div x-show="newTicket.status" class="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 px-3 py-1.5 rounded-lg">
           Columna: <span class="font-semibold" x-text="newTicket.status"></span>
         </div>
-        <input x-model="newTicket.ticket_id" placeholder="ID Tarea (ej: INC-001)" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-mono bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
-        <input x-model="newTicket.title" placeholder="Titulo" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
-        <textarea x-model="newTicket.description" placeholder="Descripcion (opcional)" rows="2" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
-        <select x-model="newTicket.priority" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
-          <option value="LOW">Low</option><option value="MEDIUM" selected>Medium</option>
-          <option value="HIGH">High</option><option value="CRITICAL">Critical</option>
-        </select>
-        <textarea x-model="newTicket.notes" placeholder="Notas (opcional)" rows="3" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">ID Tarea</label>
+          <input x-model="newTicket.ticket_id" placeholder="ID Tarea (ej: INC-001)" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-mono font-bold text-green-700 dark:text-green-400 bg-white dark:bg-gray-700">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Titulo <span class="text-red-500">*</span></label>
+          <input x-model="newTicket.title" placeholder="Titulo del ticket" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Descripcion</label>
+          <textarea x-model="newTicket.description" placeholder="Descripcion del ticket" rows="2" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Prioridad</label>
+          <select x-model="newTicket.priority" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+            <option value="LOW">Low</option><option value="MEDIUM" selected>Medium</option>
+            <option value="HIGH">High</option><option value="CRITICAL">Critical</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Notas (Markdown)</label>
+          <textarea x-model="newTicket.notes" placeholder="Notas del ticket" rows="4" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-mono bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Tags (separados por coma)</label>
+          <input x-model="newTicketTagsStr" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                 placeholder="bug, urgente, SAP">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Links (uno por linea)</label>
+          <textarea x-model="newTicketLinksStr" rows="2" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-mono bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                    placeholder="https://jira.example.com/ISSUE-123"></textarea>
+        </div>
       </div>
       <div class="flex justify-end gap-3 mt-4">
         <button @click="showNewModal = false; newTicket.status = ''" class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Cancelar</button>
@@ -268,6 +293,8 @@ function kanbanApp() {
     selectedTicket: null,
     selectedTicketTagsStr: '',
     selectedTicketLinksStr: '',
+    newTicketTagsStr: '',
+    newTicketLinksStr: '',
     ticketHistory: [],
     newTicket: {ticket_id: '', title: '', description: '', priority: 'MEDIUM', notes: '', status: '', client_code: '{{ active_client or "" }}'},
     newColName: '',
@@ -376,17 +403,22 @@ function kanbanApp() {
         alert('El titulo es obligatorio.');
         return;
       }
+      const tags = this.newTicketTagsStr.split(',').map(s => s.trim()).filter(Boolean);
+      const links = this.newTicketLinksStr.split('\n').map(s => s.trim()).filter(Boolean);
+      const payload = {...this.newTicket, tags: tags, links: links};
       const resp = await fetch('/api/kanban/tickets', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(this.newTicket),
+        body: JSON.stringify(payload),
       });
       if (!resp.ok) {
         const data = await resp.json().catch(() => ({}));
         alert('Error al crear ticket: ' + (data.error || resp.statusText));
         return;
       }
-      this.newTicket = {title: '', description: '', priority: 'MEDIUM', notes: '', status: '', client_code: '{{ active_client or "" }}'};
+      this.newTicket = {ticket_id: '', title: '', description: '', priority: 'MEDIUM', notes: '', status: '', client_code: '{{ active_client or "" }}'};
+      this.newTicketTagsStr = '';
+      this.newTicketLinksStr = '';
       this.showNewModal = false;
       await this.loadData();
     },
