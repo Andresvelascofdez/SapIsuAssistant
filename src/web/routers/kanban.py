@@ -161,6 +161,8 @@ async def create_ticket(request: Request):
         description=body.get("description") or None,
         priority=body.get("priority", "MEDIUM"),
         notes=body.get("notes") or None,
+        tags=body.get("tags") or None,
+        links=body.get("links") or None,
         status=body.get("status") or default_status,
     )
     log.info("create_ticket: created %s for client %s", ticket.id, client_code or state.active_client_code)
