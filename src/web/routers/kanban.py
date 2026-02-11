@@ -134,7 +134,6 @@ async def create_ticket(request: Request):
 
     # Resolve client: explicit from body, or fall back to session
     client_code = body.get("client_code", "").strip()
-    log.info("create_ticket: client_code=%r, session_client=%r", client_code, state.active_client_code)
 
     if client_code:
         repo, error = _get_kanban_repo_for_client(state, client_code)
@@ -165,7 +164,6 @@ async def create_ticket(request: Request):
         links=body.get("links") or None,
         status=body.get("status") or default_status,
     )
-    log.info("create_ticket: created %s for client %s", ticket.id, client_code or state.active_client_code)
     return _ticket_to_dict(ticket)
 
 
@@ -190,11 +188,55 @@ async def move_ticket(ticket_id: str, request: Request):
 @router.put("/api/kanban/tickets/{ticket_id}")
 async def update_ticket(ticket_id: str, request: Request):
     state = get_state(request)
+    body = await request.json()
+
+    target_client = body.get("client_code", "").strip()
+    source_client = body.get("source_client_code", "").strip()
+    current_client = (state.active_client_code or "").strip().upper()
+
+    # Resolve source repo: session client, or source_client_code, or client_code
     repo = _get_kanban_repo(state)
+    if not repo and (source_client or target_client):
+        source_code = source_client or target_client
+        repo, error = _get_kanban_repo_for_client(state, source_code)
+        if error:
+            return JSONResponse({"error": error}, status_code=400)
+        current_client = source_code.upper()
+
     if not repo:
         return JSONResponse({"error": "No client selected."}, status_code=400)
 
-    body = await request.json()
+    target_client_upper = target_client.upper() if target_client else ""
+
+    if target_client and target_client_upper != current_client:
+        # Moving ticket to a different client
+        old_ticket = repo.get_by_id(ticket_id)
+        if not old_ticket:
+            return JSONResponse({"error": "Ticket not found."}, status_code=404)
+
+        target_repo, error = _get_kanban_repo_for_client(state, target_client)
+        if error:
+            return JSONResponse({"error": error}, status_code=400)
+
+        # Create in target DB with updated fields
+        tags_data = body.get("tags") if body.get("tags") is not None else (json.loads(old_ticket.tags_json) if old_ticket.tags_json else None)
+        links_data = body.get("links") if body.get("links") is not None else (json.loads(old_ticket.links_json) if old_ticket.links_json else None)
+
+        new_ticket = target_repo.create_ticket(
+            title=body.get("title") or old_ticket.title,
+            ticket_id=body.get("ticket_id") if body.get("ticket_id") is not None else old_ticket.ticket_id,
+            description=body.get("description") if body.get("description") is not None else old_ticket.description,
+            priority=body.get("priority") or old_ticket.priority,
+            notes=body.get("notes") if body.get("notes") is not None else old_ticket.notes,
+            tags=tags_data,
+            links=links_data,
+            status=old_ticket.status,
+        )
+
+        repo.delete_ticket(ticket_id)
+        return _ticket_to_dict(new_ticket)
+
+    # Normal update (same client)
     ticket = repo.update_ticket(
         ticket_id,
         title=body.get("title"),

@@ -377,6 +377,188 @@ class TestKanbanClientCodeInBody:
         assert ticket["status"] == "NO_ANALIZADO"
 
 
+class TestMoveTicketBetweenClients:
+    """Test that PUT /api/kanban/tickets/{id} moves ticket when client_code changes."""
+
+    @pytest.fixture
+    def client(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SAP_DATA_ROOT", str(tmp_path))
+        import src.web.dependencies as deps
+        monkeypatch.setattr(deps, "DATA_ROOT", tmp_path)
+        from src.shared.client_manager import ClientManager
+        cm = ClientManager(tmp_path)
+        cm.register_client("AAA", "Client A")
+        cm.register_client("BBB", "Client B")
+
+        from src.web.app import app
+        from starlette.testclient import TestClient
+        c = TestClient(app)
+        c.post("/api/session/client", json={"code": "AAA"})
+        return c
+
+    def test_move_ticket_to_different_client(self, client):
+        """Editing client_code moves ticket from AAA to BBB."""
+        # Create ticket in AAA (session client)
+        resp = client.post("/api/kanban/tickets", json={
+            "title": "Movable Ticket",
+            "ticket_id": "MOV-001",
+            "priority": "HIGH",
+        })
+        assert resp.status_code == 200
+        ticket = resp.json()
+        old_id = ticket["id"]
+
+        # Verify it exists in AAA
+        resp = client.get("/api/kanban/tickets")
+        assert resp.json()["total"] == 1
+
+        # Update with different client_code -> should move to BBB
+        resp = client.put(f"/api/kanban/tickets/{old_id}", json={
+            "title": "Movable Ticket",
+            "ticket_id": "MOV-001",
+            "priority": "HIGH",
+            "client_code": "BBB",
+        })
+        assert resp.status_code == 200, f"Move failed: {resp.json()}"
+        moved = resp.json()
+        assert moved["title"] == "Movable Ticket"
+        assert moved["ticket_id"] == "MOV-001"
+
+        # Verify ticket is gone from AAA
+        resp = client.get("/api/kanban/tickets")
+        assert resp.json()["total"] == 0
+
+        # Switch to BBB and verify ticket is there
+        client.post("/api/session/client", json={"code": "BBB"})
+        resp = client.get("/api/kanban/tickets")
+        assert resp.json()["total"] == 1
+        assert resp.json()["tickets"][0]["title"] == "Movable Ticket"
+        assert resp.json()["tickets"][0]["ticket_id"] == "MOV-001"
+
+    def test_same_client_does_not_move(self, client):
+        """When client_code matches session client, normal update happens."""
+        resp = client.post("/api/kanban/tickets", json={
+            "title": "Stay here",
+            "priority": "MEDIUM",
+        })
+        assert resp.status_code == 200
+        ticket = resp.json()
+
+        resp = client.put(f"/api/kanban/tickets/{ticket['id']}", json={
+            "title": "Updated title",
+            "priority": "LOW",
+            "client_code": "AAA",
+        })
+        assert resp.status_code == 200
+        updated = resp.json()
+        assert updated["title"] == "Updated title"
+        assert updated["priority"] == "LOW"
+
+        # Still in AAA
+        resp = client.get("/api/kanban/tickets")
+        assert resp.json()["total"] == 1
+        assert resp.json()["tickets"][0]["title"] == "Updated title"
+
+    def test_move_preserves_all_fields(self, client):
+        """Moving a ticket preserves description, notes, tags, links."""
+        resp = client.post("/api/kanban/tickets", json={
+            "title": "Full ticket",
+            "ticket_id": "FULL-001",
+            "description": "Some description",
+            "priority": "CRITICAL",
+            "notes": "Important notes",
+            "tags": ["bug", "urgent"],
+            "links": ["http://example.com"],
+            "status": "EN_PROGRESO",
+        })
+        assert resp.status_code == 200
+        ticket = resp.json()
+
+        resp = client.put(f"/api/kanban/tickets/{ticket['id']}", json={
+            "title": "Full ticket",
+            "ticket_id": "FULL-001",
+            "description": "Some description",
+            "priority": "CRITICAL",
+            "notes": "Important notes",
+            "tags": ["bug", "urgent"],
+            "links": ["http://example.com"],
+            "client_code": "BBB",
+        })
+        assert resp.status_code == 200, f"Move failed: {resp.json()}"
+        moved = resp.json()
+        assert moved["title"] == "Full ticket"
+        assert moved["ticket_id"] == "FULL-001"
+        assert moved["description"] == "Some description"
+        assert moved["priority"] == "CRITICAL"
+        assert moved["notes"] == "Important notes"
+        assert moved["tags"] == ["bug", "urgent"]
+        assert moved["links"] == ["http://example.com"]
+        assert moved["status"] == "EN_PROGRESO"
+
+    def test_move_to_invalid_client_returns_400(self, client):
+        """Moving to a non-existent client returns error."""
+        resp = client.post("/api/kanban/tickets", json={
+            "title": "Bad move",
+        })
+        assert resp.status_code == 200
+        ticket = resp.json()
+
+        resp = client.put(f"/api/kanban/tickets/{ticket['id']}", json={
+            "title": "Bad move",
+            "client_code": "NONEXISTENT",
+        })
+        assert resp.status_code == 400
+
+    def test_update_ticket_without_session_client_uses_body_client(self, client):
+        """When no session client, update uses client_code from body as source."""
+        # Create ticket in AAA
+        resp = client.post("/api/kanban/tickets", json={
+            "title": "No session test",
+            "client_code": "AAA",
+        })
+        assert resp.status_code == 200
+        ticket = resp.json()
+
+        # Clear session client
+        client.post("/api/session/client", json={"code": ""})
+
+        # Update ticket using explicit client_code (same client, normal update)
+        resp = client.put(f"/api/kanban/tickets/{ticket['id']}", json={
+            "title": "Updated no session",
+            "priority": "HIGH",
+            "client_code": "AAA",
+        })
+        assert resp.status_code == 200, f"Update without session failed: {resp.json()}"
+        assert resp.json()["title"] == "Updated no session"
+
+    def test_move_ticket_without_session_client(self, client):
+        """Move ticket from AAA to BBB when no session client."""
+        # Create ticket in AAA
+        resp = client.post("/api/kanban/tickets", json={
+            "title": "Move no session",
+            "client_code": "AAA",
+        })
+        assert resp.status_code == 200
+        ticket = resp.json()
+
+        # Clear session client
+        client.post("/api/session/client", json={"code": ""})
+
+        # Move from AAA to BBB using source_client_code + client_code
+        resp = client.put(f"/api/kanban/tickets/{ticket['id']}", json={
+            "title": "Move no session",
+            "client_code": "BBB",
+            "source_client_code": "AAA",
+        })
+        assert resp.status_code == 200, f"Move without session failed: {resp.json()}"
+
+        # Verify ticket is in BBB
+        client.post("/api/session/client", json={"code": "BBB"})
+        resp = client.get("/api/kanban/tickets")
+        assert resp.json()["total"] == 1
+        assert resp.json()["tickets"][0]["title"] == "Move no session"
+
+
 # ── Session persistence ──
 
 
