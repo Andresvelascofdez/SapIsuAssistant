@@ -26,9 +26,13 @@ def _get_kanban_repo(state):
     code = state.active_client_code
     if not code:
         return None
-    db_path = state.data_root / "clients" / code / "kanban.sqlite"
-    if not db_path.parent.exists():
+    cm = get_client_manager()
+    client = cm.get_client(code)
+    if not client:
         return None
+    client_dir = state.data_root / "clients" / client.code
+    client_dir.mkdir(parents=True, exist_ok=True)
+    db_path = client_dir / "kanban.sqlite"
     return KanbanRepository(db_path, seed_columns=False)
 
 

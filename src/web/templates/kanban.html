@@ -355,11 +355,14 @@ function kanbanApp() {
     },
 
     async createTicket() {
-      if (!this.newTicket.client_code) {
+      if (!this.newTicket.client_code || !this.newTicket.client_code.trim()) {
         alert('Debe seleccionar un cliente.');
         return;
       }
-      if (!this.newTicket.title.trim()) return;
+      if (!this.newTicket.title.trim()) {
+        alert('El titulo es obligatorio.');
+        return;
+      }
       const resp = await fetch('/api/kanban/tickets', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
