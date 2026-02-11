@@ -222,11 +222,16 @@
       </div>
       <template x-if="selectedTicket">
         <div class="space-y-3">
-          <div class="flex items-center gap-3">
-            <div class="flex-1">
-              <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">ID Tarea</label>
-              <input x-model="selectedTicket.ticket_id" placeholder="ID Tarea (ej: INC-001)" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-mono font-bold text-green-700 dark:text-green-400 bg-white dark:bg-gray-700">
-            </div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Cliente</label>
+            <select disabled
+                    class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-100 opacity-70 cursor-not-allowed">
+              <option selected>{{ active_client or "Sin cliente" }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">ID Tarea</label>
+            <input x-model="selectedTicket.ticket_id" placeholder="ID Tarea (ej: INC-001)" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-mono font-bold text-green-700 dark:text-green-400 bg-white dark:bg-gray-700">
           </div>
           <div class="text-xs text-gray-400 dark:text-gray-500" x-text="'Creado: ' + formatDate(selectedTicket.created_at) + '  |  Modificado: ' + timeAgo(selectedTicket.updated_at)"></div>
           <div>
