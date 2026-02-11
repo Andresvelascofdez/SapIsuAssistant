@@ -360,11 +360,16 @@ function kanbanApp() {
         return;
       }
       if (!this.newTicket.title.trim()) return;
-      await fetch('/api/kanban/tickets', {
+      const resp = await fetch('/api/kanban/tickets', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(this.newTicket),
       });
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        alert('Error al crear ticket: ' + (data.error || resp.statusText));
+        return;
+      }
       this.newTicket = {title: '', priority: 'MEDIUM', notes: '', status: '', client_code: '{{ active_client or "" }}'};
       this.showNewModal = false;
       await this.loadData();
@@ -385,7 +390,7 @@ function kanbanApp() {
       if (!this.selectedTicket) return;
       const tags = this.selectedTicketTagsStr.split(',').map(s => s.trim()).filter(Boolean);
       const links = this.selectedTicketLinksStr.split('\n').map(s => s.trim()).filter(Boolean);
-      await fetch('/api/kanban/tickets/' + this.selectedTicket.id, {
+      const resp = await fetch('/api/kanban/tickets/' + this.selectedTicket.id, {
         method: 'PUT',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
@@ -396,6 +401,11 @@ function kanbanApp() {
           links: links,
         }),
       });
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        alert('Error al guardar: ' + (data.error || resp.statusText));
+        return;
+      }
       this.selectedTicket = null;
       await this.loadData();
     },
@@ -404,7 +414,12 @@ function kanbanApp() {
       if (!this.selectedTicket) return;
       const name = this.selectedTicket.ticket_id || this.selectedTicket.title;
       if (!confirm('Eliminar ticket "' + name + '"? Esta accion no se puede deshacer.')) return;
-      await fetch('/api/kanban/tickets/' + this.selectedTicket.id, {method: 'DELETE'});
+      const resp = await fetch('/api/kanban/tickets/' + this.selectedTicket.id, {method: 'DELETE'});
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        alert('Error al eliminar: ' + (data.error || resp.statusText));
+        return;
+      }
       this.selectedTicket = null;
       await this.loadData();
     },

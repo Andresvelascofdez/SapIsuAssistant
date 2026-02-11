@@ -33,14 +33,22 @@ def _get_kanban_repo(state):
 
 
 def _get_kanban_repo_for_client(state, client_code: str):
-    """Return a per-client KanbanRepository for an explicit client code."""
+    """Return a per-client KanbanRepository for an explicit client code.
+
+    Validates client is registered and ensures directory exists.
+    Returns (repo, None) on success or (None, error_msg) on failure.
+    """
     from src.kanban.storage.kanban_repository import KanbanRepository
     if not client_code:
-        return None
-    db_path = state.data_root / "clients" / client_code / "kanban.sqlite"
-    if not db_path.parent.exists():
-        return None
-    return KanbanRepository(db_path, seed_columns=False)
+        return None, "No client selected."
+    cm = get_client_manager()
+    client = cm.get_client(client_code)
+    if not client:
+        return None, f"Client '{client_code}' is not registered."
+    client_dir = state.data_root / "clients" / client.code
+    client_dir.mkdir(parents=True, exist_ok=True)
+    db_path = client_dir / "kanban.sqlite"
+    return KanbanRepository(db_path, seed_columns=False), None
 
 
 def _get_all_repos(state):
@@ -122,7 +130,9 @@ async def create_ticket(request: Request):
     # Resolve client: explicit from body, or fall back to session
     client_code = body.get("client_code", "").strip()
     if client_code:
-        repo = _get_kanban_repo_for_client(state, client_code)
+        repo, error = _get_kanban_repo_for_client(state, client_code)
+        if error:
+            return JSONResponse({"error": error}, status_code=400)
     else:
         repo = _get_kanban_repo(state)
 

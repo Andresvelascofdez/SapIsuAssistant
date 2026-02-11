@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.2.3 (2026-02-11)
+
+### Bugfix - Creacion de tickets Kanban
+
+- **Error handling en frontend**: `createTicket()`, `saveTicket()` y `confirmDeleteTicket()` ahora verifican `resp.ok` y muestran errores al usuario en lugar de fallar silenciosamente
+- **Validacion robusta de cliente en backend**: `_get_kanban_repo_for_client` ahora valida el cliente via ClientManager, retorna errores claros y auto-crea directorios si faltan
+
 ## v0.2.2 (2026-02-11)
 
 ### Kanban - Creacion de tickets
