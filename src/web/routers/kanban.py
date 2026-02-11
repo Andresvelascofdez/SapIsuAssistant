@@ -69,8 +69,8 @@ def _get_all_repos(state):
     return repos
 
 
-def _ticket_to_dict(t):
-    return {
+def _ticket_to_dict(t, client_code=None):
+    d = {
         "id": t.id,
         "ticket_id": t.ticket_id,
         "title": t.title,
@@ -84,6 +84,9 @@ def _ticket_to_dict(t):
         "updated_at": t.updated_at,
         "closed_at": t.closed_at,
     }
+    if client_code is not None:
+        d["client_code"] = client_code
+    return d
 
 
 def _column_to_dict(c):
@@ -111,20 +114,23 @@ async def list_tickets(
 ):
     state = get_state(request)
     repo = _get_kanban_repo(state)
+    active_code = (state.active_client_code or "").upper() or None
 
     if repo:
         tickets = repo.list_tickets(search=search, priority=priority, limit=limit, offset=offset)
         total = repo.count_tickets(search=search, priority=priority)
+        ticket_dicts = [_ticket_to_dict(t, client_code=active_code) for t in tickets]
     else:
-        tickets = []
-        total = 0
-        for _code, r in _get_all_repos(state):
-            tickets.extend(r.list_tickets(search=search, priority=priority))
-        total = len(tickets)
+        all_tickets = []
+        for code, r in _get_all_repos(state):
+            for t in r.list_tickets(search=search, priority=priority):
+                all_tickets.append((t, code))
+        total = len(all_tickets)
         if limit is not None:
-            tickets = tickets[offset:offset + limit]
+            all_tickets = all_tickets[offset:offset + limit]
+        ticket_dicts = [_ticket_to_dict(t, client_code=c) for t, c in all_tickets]
 
-    return {"tickets": [_ticket_to_dict(t) for t in tickets], "total": total}
+    return {"tickets": ticket_dicts, "total": total}
 
 
 @router.post("/api/kanban/tickets")

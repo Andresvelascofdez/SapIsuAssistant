@@ -101,6 +101,7 @@
             <div class="bg-white dark:bg-gray-700 rounded-lg shadow-sm p-3 cursor-grab active:cursor-grabbing border-l-4 border border-gray-200 dark:border-gray-600"
                  :class="priorityBorderClass(ticket.priority)"
                  :data-id="ticket.id"
+                 :data-client="ticket.client_code || ''"
                  @click="selectTicket(ticket)">
               <div class="flex items-center justify-between mb-1">
                 <span x-show="ticket.ticket_id" class="text-sm font-mono font-bold text-green-700 dark:text-green-400 truncate" x-text="ticket.ticket_id"></span>
@@ -436,7 +437,7 @@ function kanbanApp() {
       this.selectedTicket = {...ticket};
       this.selectedTicketTagsStr = (ticket.tags || []).join(', ');
       this.selectedTicketLinksStr = (ticket.links || []).join('\n');
-      this.selectedTicketClient = '{{ active_client or "" }}';
+      this.selectedTicketClient = ticket.client_code || '{{ active_client or "" }}';
       // Load history
       try {
         const resp = await fetch('/api/kanban/tickets/' + ticket.id + '/history');
@@ -576,12 +577,13 @@ function kanbanApp() {
             c.classList.remove('bg-blue-50/50', 'dark:bg-blue-900/20');
           });
           const ticketId = evt.item.dataset.id;
+          const ticketClient = evt.item.dataset.client || '';
           const targetCol = evt.to.id.replace('col-', '');
           if (ticketId && targetCol) {
             await fetch('/api/kanban/tickets/' + ticketId + '/move', {
               method: 'PUT',
               headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({status: targetCol, client_code: '{{ active_client or "" }}'}),
+              body: JSON.stringify({status: targetCol, client_code: ticketClient}),
             });
             await app.loadData();
           }
