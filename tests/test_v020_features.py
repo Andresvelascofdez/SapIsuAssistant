@@ -605,6 +605,57 @@ class TestMoveTicketBetweenClients:
         resp = client.get("/api/kanban/tickets")
         assert resp.json()["tickets"][0]["status"] == "TESTING"
 
+    def test_list_tickets_includes_client_code(self, client):
+        """API response includes client_code so frontend can send it back."""
+        # Create tickets in different clients
+        client.post("/api/kanban/tickets", json={
+            "title": "In AAA", "client_code": "AAA",
+        })
+        client.post("/api/kanban/tickets", json={
+            "title": "In BBB", "client_code": "BBB",
+        })
+
+        # List with session client AAA
+        resp = client.get("/api/kanban/tickets")
+        for t in resp.json()["tickets"]:
+            assert "client_code" in t, "ticket must include client_code"
+            assert t["client_code"] == "AAA"
+
+        # List without session client (all tickets)
+        client.post("/api/session/client", json={"code": ""})
+        resp = client.get("/api/kanban/tickets")
+        tickets = resp.json()["tickets"]
+        codes = {t["title"]: t["client_code"] for t in tickets}
+        assert codes.get("In AAA") == "AAA"
+        assert codes.get("In BBB") == "BBB"
+
+    def test_drag_drop_uses_ticket_client_code(self, client):
+        """Full flow: no session, list returns client_code, move uses it."""
+        # Create ticket
+        client.post("/api/kanban/tickets", json={
+            "title": "Drag real", "client_code": "AAA", "status": "NO_ANALIZADO",
+        })
+
+        # Clear session
+        client.post("/api/session/client", json={"code": ""})
+
+        # List tickets - get client_code from response
+        resp = client.get("/api/kanban/tickets")
+        ticket = resp.json()["tickets"][0]
+        assert ticket["client_code"] == "AAA"
+
+        # Move using the client_code from the ticket
+        resp = client.put(f"/api/kanban/tickets/{ticket['id']}/move", json={
+            "status": "EN_PROGRESO",
+            "client_code": ticket["client_code"],
+        })
+        assert resp.status_code == 200, f"Move failed: {resp.json()}"
+
+        # Verify persistence
+        client.post("/api/session/client", json={"code": "AAA"})
+        resp = client.get("/api/kanban/tickets")
+        assert resp.json()["tickets"][0]["status"] == "EN_PROGRESO"
+
 
 # ── Session persistence ──
 
