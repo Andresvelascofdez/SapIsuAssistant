@@ -74,6 +74,7 @@ def _ticket_to_dict(t):
         "id": t.id,
         "ticket_id": t.ticket_id,
         "title": t.title,
+        "description": t.description,
         "status": t.status,
         "priority": t.priority,
         "notes": t.notes,
@@ -133,6 +134,8 @@ async def create_ticket(request: Request):
 
     # Resolve client: explicit from body, or fall back to session
     client_code = body.get("client_code", "").strip()
+    log.info("create_ticket: client_code=%r, session_client=%r", client_code, state.active_client_code)
+
     if client_code:
         repo, error = _get_kanban_repo_for_client(state, client_code)
         if error:
@@ -141,7 +144,7 @@ async def create_ticket(request: Request):
         repo = _get_kanban_repo(state)
 
     if not repo:
-        return JSONResponse({"error": "No client selected."}, status_code=400)
+        return JSONResponse({"error": "No client selected. Select a client in the header or in the form."}, status_code=400)
 
     title = body.get("title", "").strip()
     if not title:
@@ -154,10 +157,12 @@ async def create_ticket(request: Request):
 
     ticket = repo.create_ticket(
         title=title,
+        description=body.get("description") or None,
         priority=body.get("priority", "MEDIUM"),
         notes=body.get("notes") or None,
         status=body.get("status") or default_status,
     )
+    log.info("create_ticket: created %s for client %s", ticket.id, client_code or state.active_client_code)
     return _ticket_to_dict(ticket)
 
 
@@ -190,6 +195,7 @@ async def update_ticket(ticket_id: str, request: Request):
     ticket = repo.update_ticket(
         ticket_id,
         title=body.get("title"),
+        description=body.get("description"),
         priority=body.get("priority"),
         notes=body.get("notes"),
         tags=body.get("tags"),
@@ -358,12 +364,13 @@ async def export_csv(request: Request):
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["ID Tarea", "Titulo", "Estado", "Prioridad", "Notas", "Tags", "Creado", "Actualizado", "Cerrado"])
+    writer.writerow(["ID Tarea", "Titulo", "Descripcion", "Estado", "Prioridad", "Notas", "Tags", "Creado", "Actualizado", "Cerrado"])
     for t in tickets:
         tags = json.loads(t.tags_json) if t.tags_json else []
         writer.writerow([
             t.ticket_id or "",
             t.title,
+            t.description or "",
             t.status,
             t.priority,
             t.notes or "",

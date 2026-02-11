@@ -57,6 +57,7 @@ class Ticket:
     id: str
     ticket_id: str | None
     title: str
+    description: str | None
     status: str
     priority: str
     notes: str | None
@@ -106,6 +107,7 @@ class KanbanRepository:
                     id TEXT PRIMARY KEY,
                     ticket_id TEXT,
                     title TEXT NOT NULL,
+                    description TEXT,
                     status TEXT NOT NULL,
                     priority TEXT NOT NULL,
                     notes TEXT,
@@ -116,6 +118,11 @@ class KanbanRepository:
                     closed_at TEXT NULL
                 )
             """)
+            # Migrate existing DBs: add description column if missing
+            try:
+                conn.execute("ALTER TABLE tickets ADD COLUMN description TEXT")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS ticket_history (
                     id TEXT PRIMARY KEY,
@@ -153,6 +160,7 @@ class KanbanRepository:
         title: str,
         priority: str = TicketPriority.MEDIUM,
         ticket_id: str | None = None,
+        description: str | None = None,
         notes: str | None = None,
         links: list[str] | None = None,
         tags: list[str] | None = None,
@@ -166,12 +174,13 @@ class KanbanRepository:
 
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
-                INSERT INTO tickets (id, ticket_id, title, status, priority, notes, links_json, tags_json, created_at, updated_at, closed_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO tickets (id, ticket_id, title, description, status, priority, notes, links_json, tags_json, created_at, updated_at, closed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 internal_id,
                 ticket_id,
                 title,
+                description,
                 status,
                 priority,
                 notes,
@@ -196,7 +205,7 @@ class KanbanRepository:
         """Get ticket by internal ID."""
         with sqlite3.connect(self.db_path) as conn:
             row = conn.execute(
-                "SELECT id, ticket_id, title, status, priority, notes, links_json, tags_json, created_at, updated_at, closed_at FROM tickets WHERE id = ?",
+                "SELECT id, ticket_id, title, description, status, priority, notes, links_json, tags_json, created_at, updated_at, closed_at FROM tickets WHERE id = ?",
                 (internal_id,)
             ).fetchone()
 
@@ -241,6 +250,7 @@ class KanbanRepository:
         self,
         internal_id: str,
         title: str | None = None,
+        description: str | None = None,
         priority: str | None = None,
         notes: str | None = None,
         links: list[str] | None = None,
@@ -256,6 +266,9 @@ class KanbanRepository:
         if title is not None:
             updates.append("title = ?")
             params.append(title)
+        if description is not None:
+            updates.append("description = ?")
+            params.append(description)
         if priority is not None:
             updates.append("priority = ?")
             params.append(priority)
@@ -315,12 +328,12 @@ class KanbanRepository:
             clauses.append("priority = ?")
             params.append(priority)
         if search:
-            clauses.append("(ticket_id LIKE ? OR title LIKE ? OR notes LIKE ?)")
+            clauses.append("(ticket_id LIKE ? OR title LIKE ? OR description LIKE ? OR notes LIKE ?)")
             like = f"%{search}%"
-            params.extend([like, like, like])
+            params.extend([like, like, like, like])
 
         where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
-        sql = f"SELECT id, ticket_id, title, status, priority, notes, links_json, tags_json, created_at, updated_at, closed_at FROM tickets{where} ORDER BY created_at DESC"
+        sql = f"SELECT id, ticket_id, title, description, status, priority, notes, links_json, tags_json, created_at, updated_at, closed_at FROM tickets{where} ORDER BY created_at DESC"
 
         if limit is not None:
             sql += " LIMIT ? OFFSET ?"
@@ -347,9 +360,9 @@ class KanbanRepository:
             clauses.append("priority = ?")
             params.append(priority)
         if search:
-            clauses.append("(ticket_id LIKE ? OR title LIKE ? OR notes LIKE ?)")
+            clauses.append("(ticket_id LIKE ? OR title LIKE ? OR description LIKE ? OR notes LIKE ?)")
             like = f"%{search}%"
-            params.extend([like, like, like])
+            params.extend([like, like, like, like])
 
         where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
         sql = f"SELECT COUNT(*) FROM tickets{where}"
