@@ -558,6 +558,53 @@ class TestMoveTicketBetweenClients:
         assert resp.json()["total"] == 1
         assert resp.json()["tickets"][0]["title"] == "Move no session"
 
+    def test_drag_drop_move_without_session_client(self, client):
+        """Drag-drop status change works even without session client."""
+        # Create ticket in AAA
+        resp = client.post("/api/kanban/tickets", json={
+            "title": "Drag ticket",
+            "client_code": "AAA",
+            "status": "NO_ANALIZADO",
+        })
+        assert resp.status_code == 200
+        ticket = resp.json()
+        assert ticket["status"] == "NO_ANALIZADO"
+
+        # Clear session client (simulates expired/missing session)
+        client.post("/api/session/client", json={"code": ""})
+
+        # Drag-drop move: the JS sends PUT /move with {status, client_code}
+        resp = client.put(f"/api/kanban/tickets/{ticket['id']}/move", json={
+            "status": "EN_PROGRESO",
+            "client_code": "AAA",
+        })
+        assert resp.status_code == 200, f"Move failed: {resp.json()}"
+        assert resp.json()["status"] == "EN_PROGRESO"
+
+        # Verify persistence: re-set session and fetch
+        client.post("/api/session/client", json={"code": "AAA"})
+        resp = client.get("/api/kanban/tickets")
+        assert resp.json()["tickets"][0]["status"] == "EN_PROGRESO"
+
+    def test_drag_drop_move_with_session_client(self, client):
+        """Drag-drop status change works with session client."""
+        resp = client.post("/api/kanban/tickets", json={
+            "title": "Drag session",
+            "status": "NO_ANALIZADO",
+        })
+        assert resp.status_code == 200
+        ticket = resp.json()
+
+        resp = client.put(f"/api/kanban/tickets/{ticket['id']}/move", json={
+            "status": "TESTING",
+        })
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "TESTING"
+
+        # Verify persistence
+        resp = client.get("/api/kanban/tickets")
+        assert resp.json()["tickets"][0]["status"] == "TESTING"
+
 
 # ── Session persistence ──
 
