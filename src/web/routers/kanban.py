@@ -394,16 +394,28 @@ async def delete_column(col_id: int, request: Request):
 async def stale_info(request: Request, days: int = Query(default=None)):
     state = get_state(request)
     threshold = days if days is not None else state.stale_ticket_days
+    stale_statuses = ["NO_ANALIZADO", "EN_PROGRESO"]
     repo = _get_kanban_repo(state)
+    active_code = (state.active_client_code or "").upper() or None
 
     all_stale_ids = []
+    stale_tickets = []
     if repo:
-        all_stale_ids = repo.get_stale_ticket_ids(threshold)
+        all_stale_ids = repo.get_stale_ticket_ids(threshold, statuses=stale_statuses)
+        for sid in all_stale_ids:
+            t = repo.get_by_id(sid)
+            if t:
+                stale_tickets.append(_ticket_to_dict(t, client_code=active_code))
     else:
-        for _code, r in _get_all_repos(state):
-            all_stale_ids.extend(r.get_stale_ticket_ids(threshold))
+        for code, r in _get_all_repos(state):
+            ids = r.get_stale_ticket_ids(threshold, statuses=stale_statuses)
+            all_stale_ids.extend(ids)
+            for sid in ids:
+                t = r.get_by_id(sid)
+                if t:
+                    stale_tickets.append(_ticket_to_dict(t, client_code=code))
 
-    return {"stale_count": len(all_stale_ids), "stale_ids": all_stale_ids}
+    return {"stale_count": len(all_stale_ids), "stale_ids": all_stale_ids, "stale_tickets": stale_tickets}
 
 
 # ── CSV import endpoint ──

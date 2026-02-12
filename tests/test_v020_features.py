@@ -1887,6 +1887,7 @@ class TestStaleTicketsAPI:
         data = resp.json()
         assert data["stale_count"] == 0
         assert data["stale_ids"] == []
+        assert data["stale_tickets"] == []
 
     def test_stale_info_detects_old_tickets(self, client, tmp_path):
         resp = client.post("/api/kanban/tickets", json={"title": "Will be old"})
@@ -1904,6 +1905,31 @@ class TestStaleTicketsAPI:
         data = resp.json()
         assert data["stale_count"] == 1
         assert ticket["id"] in data["stale_ids"]
+        # Verify full ticket details are returned
+        assert len(data["stale_tickets"]) == 1
+        st = data["stale_tickets"][0]
+        assert st["id"] == ticket["id"]
+        assert st["title"] == "Will be old"
+        assert st["status"] == "NO_ANALIZADO"
+
+    def test_stale_ignores_non_actionable_statuses(self, client, tmp_path):
+        """Old tickets in TESTING, ANALIZADO, CERRADO etc. should NOT be stale."""
+        resp = client.post("/api/kanban/tickets", json={
+            "title": "In testing", "status": "TESTING",
+        })
+        assert resp.status_code == 200
+        ticket = resp.json()
+
+        import sqlite3
+        db_path = tmp_path / "clients" / "TST" / "kanban.sqlite"
+        old_date = (datetime.now(UTC) - timedelta(days=5)).isoformat()
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("UPDATE tickets SET updated_at = ? WHERE id = ?", (old_date, ticket["id"]))
+
+        resp = client.get("/api/kanban/stale-info?days=3")
+        data = resp.json()
+        assert data["stale_count"] == 0
+        assert ticket["id"] not in data["stale_ids"]
 
 
 class TestStaleDaysSettingAPI:
