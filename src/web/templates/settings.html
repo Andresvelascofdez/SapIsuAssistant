@@ -53,6 +53,19 @@
     <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Data Location</h2>
     <p class="text-sm text-gray-600 dark:text-gray-300">Data root: <code class="bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 px-2 py-0.5 rounded text-xs">./data</code></p>
   </div>
+
+  <!-- Stale Ticket Alerts -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Alertas de tickets estancados</h2>
+    <p class="text-sm text-gray-600 dark:text-gray-300 mb-3">Los tickets sin movimiento durante este periodo se marcaran visualmente en el tablero Kanban.</p>
+    <div class="flex gap-4 items-center">
+      <label class="text-sm text-gray-700 dark:text-gray-300">Dias sin movimiento:</label>
+      <input x-model.number="staleDays" type="number" min="1" max="365"
+             class="w-20 border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+      <button @click="applyStaleDays()" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">Apply</button>
+    </div>
+    <p x-show="staleDaysMsg" class="text-sm text-green-600 dark:text-green-400 mt-2" x-text="staleDaysMsg"></p>
+  </div>
 </div>
 
 <script>
@@ -65,6 +78,8 @@ function settingsApp() {
     qdrantMsg: '',
     apiKey: '',
     apiKeyMsg: '',
+    staleDays: {{ stale_ticket_days }},
+    staleDaysMsg: '',
 
     async loadClients() {
       const resp = await fetch('/api/settings/clients');
@@ -106,6 +121,21 @@ function settingsApp() {
       this.apiKeyMsg = 'API key set for this session.';
       this.apiKey = '';
       setTimeout(() => this.apiKeyMsg = '', 3000);
+    },
+
+    async applyStaleDays() {
+      const resp = await fetch('/api/settings/stale-days', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({days: this.staleDays}),
+      });
+      if (resp.ok) {
+        this.staleDaysMsg = 'Umbral actualizado a ' + this.staleDays + ' dias.';
+        setTimeout(() => this.staleDaysMsg = '', 3000);
+      } else {
+        const data = await resp.json().catch(() => ({}));
+        this.staleDaysMsg = data.error || 'Error al actualizar.';
+      }
     },
   }
 }

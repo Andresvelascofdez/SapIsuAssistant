@@ -155,6 +155,11 @@ async def create_ticket(request: Request):
     if not title:
         return JSONResponse({"error": "Title is required."}, status_code=400)
 
+    # Validate unique ticket_id
+    ticket_id_val = (body.get("ticket_id") or "").strip() or None
+    if ticket_id_val and repo.ticket_id_exists(ticket_id_val):
+        return JSONResponse({"error": f"Ya existe un ticket con el ID '{ticket_id_val}'."}, status_code=400)
+
     # Get default status from global columns
     global_repo = _get_global_repo(state)
     columns = global_repo.list_columns()
@@ -233,6 +238,11 @@ async def update_ticket(ticket_id: str, request: Request):
         if error:
             return JSONResponse({"error": error}, status_code=400)
 
+        # Validate unique ticket_id in target client DB
+        new_ticket_id = body.get("ticket_id") if body.get("ticket_id") is not None else old_ticket.ticket_id
+        if new_ticket_id and target_repo.ticket_id_exists(new_ticket_id):
+            return JSONResponse({"error": f"Ya existe un ticket con el ID '{new_ticket_id}'."}, status_code=400)
+
         # Create in target DB with updated fields
         tags_data = body.get("tags") if body.get("tags") is not None else (json.loads(old_ticket.tags_json) if old_ticket.tags_json else None)
         links_data = body.get("links") if body.get("links") is not None else (json.loads(old_ticket.links_json) if old_ticket.links_json else None)
@@ -252,6 +262,10 @@ async def update_ticket(ticket_id: str, request: Request):
         return _ticket_to_dict(new_ticket)
 
     # Normal update (same client)
+    new_ticket_id = body.get("ticket_id")
+    if new_ticket_id is not None and repo.ticket_id_exists(new_ticket_id, exclude_id=ticket_id):
+        return JSONResponse({"error": f"Ya existe un ticket con el ID '{new_ticket_id}'."}, status_code=400)
+
     ticket = repo.update_ticket(
         ticket_id,
         title=body.get("title"),
@@ -371,6 +385,25 @@ async def delete_column(col_id: int, request: Request):
 
     repo.delete_column(col_id)
     return {"status": "deleted"}
+
+
+# ── Stale ticket info endpoint ──
+
+
+@router.get("/api/kanban/stale-info")
+async def stale_info(request: Request, days: int = Query(default=None)):
+    state = get_state(request)
+    threshold = days if days is not None else state.stale_ticket_days
+    repo = _get_kanban_repo(state)
+
+    all_stale_ids = []
+    if repo:
+        all_stale_ids = repo.get_stale_ticket_ids(threshold)
+    else:
+        for _code, r in _get_all_repos(state):
+            all_stale_ids.extend(r.get_stale_ticket_ids(threshold))
+
+    return {"stale_count": len(all_stale_ids), "stale_ids": all_stale_ids}
 
 
 # ── CSV import endpoint ──

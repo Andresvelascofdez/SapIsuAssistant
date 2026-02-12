@@ -14,3 +14,4 @@ class AppState:
     standard_kb_enabled: bool = True
     qdrant_url: str = "http://localhost:6333"
     chat_retention_days: int = 30
+    stale_ticket_days: int = 3

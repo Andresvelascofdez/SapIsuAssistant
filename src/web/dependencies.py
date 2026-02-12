@@ -25,6 +25,7 @@ def get_state(request: Request) -> AppState:
         standard_kb_enabled=session.get("standard_kb_enabled", True),
         qdrant_url=session.get("qdrant_url", "http://localhost:6333"),
         chat_retention_days=session.get("chat_retention_days", 30),
+        stale_ticket_days=session.get("stale_ticket_days", 3),
     )
 
 
@@ -60,4 +61,5 @@ def get_template_context(request: Request) -> dict:
         "qdrant_url": state.qdrant_url,
         "clients": [c.code for c in clients],
         "chat_retention_days": state.chat_retention_days,
+        "stale_ticket_days": state.stale_ticket_days,
     }
