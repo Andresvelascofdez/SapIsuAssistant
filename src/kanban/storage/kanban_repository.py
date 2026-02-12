@@ -6,7 +6,7 @@ Independent from assistant - uses its own database.
 import sqlite3
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -383,6 +383,39 @@ class KanbanRepository:
             ).fetchall()
 
             return [TicketHistoryEntry(*r) for r in rows]
+
+    def ticket_id_exists(self, ticket_id: str, exclude_id: str | None = None) -> bool:
+        """Check if a ticket_id already exists, optionally excluding a row by internal id."""
+        if not ticket_id:
+            return False
+        with sqlite3.connect(self.db_path) as conn:
+            if exclude_id:
+                row = conn.execute(
+                    "SELECT 1 FROM tickets WHERE ticket_id = ? AND id != ? LIMIT 1",
+                    (ticket_id, exclude_id),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT 1 FROM tickets WHERE ticket_id = ? LIMIT 1",
+                    (ticket_id,),
+                ).fetchone()
+            return row is not None
+
+    def get_stale_ticket_ids(self, days: int, statuses: list[str] | None = None) -> list[str]:
+        """Return internal ids of tickets not updated in the last N days."""
+        cutoff = (datetime.now(UTC) - timedelta(days=days)).isoformat()
+        clauses = ["updated_at < ?"]
+        params: list = [cutoff]
+        if statuses:
+            placeholders = ", ".join("?" for _ in statuses)
+            clauses.append(f"status IN ({placeholders})")
+            params.extend(statuses)
+        where = " AND ".join(clauses)
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                f"SELECT id FROM tickets WHERE {where}", params
+            ).fetchall()
+            return [r[0] for r in rows]
 
     # ── Column management ──
 

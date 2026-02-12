@@ -1712,3 +1712,223 @@ class TestChatSessionAPI:
     def test_retention_invalid_days(self, client):
         resp = client.post("/api/chat/retention", json={"days": 10})
         assert resp.status_code == 400
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  Ticket ID uniqueness validation
+# ═══════════════════════════════════════════════════════════════════
+
+
+class TestTicketIdUniqueness:
+    """Validate that duplicate ticket_id is rejected on create and update."""
+
+    def test_repo_ticket_id_exists(self, tmp_path):
+        repo = KanbanRepository(tmp_path / "k.db", seed_columns=True)
+        repo.create_ticket(title="A", ticket_id="DUP-001")
+        assert repo.ticket_id_exists("DUP-001") is True
+        assert repo.ticket_id_exists("DUP-999") is False
+
+    def test_repo_ticket_id_exists_exclude(self, tmp_path):
+        repo = KanbanRepository(tmp_path / "k.db", seed_columns=True)
+        t = repo.create_ticket(title="A", ticket_id="DUP-001")
+        assert repo.ticket_id_exists("DUP-001", exclude_id=t.id) is False
+        repo.create_ticket(title="B", ticket_id="DUP-002")
+        assert repo.ticket_id_exists("DUP-002", exclude_id=t.id) is True
+
+    def test_repo_ticket_id_exists_empty_string(self, tmp_path):
+        repo = KanbanRepository(tmp_path / "k.db", seed_columns=True)
+        assert repo.ticket_id_exists("") is False
+        assert repo.ticket_id_exists(None) is False
+
+
+class TestTicketIdUniquenessAPI:
+    """API-level tests for duplicate ticket_id rejection."""
+
+    @pytest.fixture
+    def client(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SAP_DATA_ROOT", str(tmp_path))
+        import src.web.dependencies as deps
+        monkeypatch.setattr(deps, "DATA_ROOT", tmp_path)
+        from src.shared.client_manager import ClientManager
+        cm = ClientManager(tmp_path)
+        cm.register_client("TST", "Test Client")
+
+        from src.web.app import app
+        from starlette.testclient import TestClient
+        c = TestClient(app)
+        c.post("/api/session/client", json={"code": "TST"})
+        return c
+
+    def test_create_duplicate_ticket_id_returns_400(self, client):
+        resp = client.post("/api/kanban/tickets", json={
+            "title": "First", "ticket_id": "UNQ-001",
+        })
+        assert resp.status_code == 200
+
+        resp = client.post("/api/kanban/tickets", json={
+            "title": "Second", "ticket_id": "UNQ-001",
+        })
+        assert resp.status_code == 400
+        assert "Ya existe" in resp.json()["error"]
+
+    def test_create_without_ticket_id_always_ok(self, client):
+        """Tickets without ticket_id should never conflict."""
+        resp1 = client.post("/api/kanban/tickets", json={"title": "No ID 1"})
+        resp2 = client.post("/api/kanban/tickets", json={"title": "No ID 2"})
+        assert resp1.status_code == 200
+        assert resp2.status_code == 200
+
+    def test_update_same_ticket_keeps_own_id(self, client):
+        """Updating a ticket with its own ticket_id should not fail."""
+        resp = client.post("/api/kanban/tickets", json={
+            "title": "Keep me", "ticket_id": "KEEP-001",
+        })
+        assert resp.status_code == 200
+        tid = resp.json()["id"]
+
+        resp = client.put(f"/api/kanban/tickets/{tid}", json={
+            "title": "Updated title", "ticket_id": "KEEP-001",
+        })
+        assert resp.status_code == 200
+        assert resp.json()["title"] == "Updated title"
+
+    def test_update_ticket_id_to_existing_returns_400(self, client):
+        """Changing ticket_id to one already used by another ticket fails."""
+        client.post("/api/kanban/tickets", json={
+            "title": "Existing", "ticket_id": "EXIST-001",
+        })
+        resp = client.post("/api/kanban/tickets", json={
+            "title": "Another", "ticket_id": "OTHER-001",
+        })
+        tid = resp.json()["id"]
+
+        resp = client.put(f"/api/kanban/tickets/{tid}", json={
+            "ticket_id": "EXIST-001",
+        })
+        assert resp.status_code == 400
+        assert "Ya existe" in resp.json()["error"]
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  Stale ticket alerts
+# ═══════════════════════════════════════════════════════════════════
+
+
+class TestStaleTickets:
+    """Repository-level stale ticket detection."""
+
+    def test_get_stale_ticket_ids(self, tmp_path):
+        repo = KanbanRepository(tmp_path / "k.db", seed_columns=True)
+        t1 = repo.create_ticket(title="Fresh")
+        t2 = repo.create_ticket(title="Old")
+
+        # Manually age t2
+        import sqlite3
+        old_date = (datetime.now(UTC) - timedelta(days=5)).isoformat()
+        with sqlite3.connect(tmp_path / "k.db") as conn:
+            conn.execute("UPDATE tickets SET updated_at = ? WHERE id = ?", (old_date, t2.id))
+
+        stale = repo.get_stale_ticket_ids(3)
+        assert t2.id in stale
+        assert t1.id not in stale
+
+    def test_get_stale_ticket_ids_respects_threshold(self, tmp_path):
+        repo = KanbanRepository(tmp_path / "k.db", seed_columns=True)
+        t = repo.create_ticket(title="Test")
+
+        import sqlite3
+        old_date = (datetime.now(UTC) - timedelta(days=2)).isoformat()
+        with sqlite3.connect(tmp_path / "k.db") as conn:
+            conn.execute("UPDATE tickets SET updated_at = ? WHERE id = ?", (old_date, t.id))
+
+        assert t.id not in repo.get_stale_ticket_ids(3)
+        assert t.id in repo.get_stale_ticket_ids(1)
+
+    def test_get_stale_ticket_ids_with_status_filter(self, tmp_path):
+        repo = KanbanRepository(tmp_path / "k.db", seed_columns=True)
+        t1 = repo.create_ticket(title="In progress", status="EN_PROGRESO")
+        t2 = repo.create_ticket(title="Closed", status="CERRADO")
+
+        import sqlite3
+        old_date = (datetime.now(UTC) - timedelta(days=5)).isoformat()
+        with sqlite3.connect(tmp_path / "k.db") as conn:
+            conn.execute("UPDATE tickets SET updated_at = ? WHERE id = ?", (old_date, t1.id))
+            conn.execute("UPDATE tickets SET updated_at = ? WHERE id = ?", (old_date, t2.id))
+
+        stale = repo.get_stale_ticket_ids(3, statuses=["EN_PROGRESO"])
+        assert t1.id in stale
+        assert t2.id not in stale
+
+
+class TestStaleTicketsAPI:
+    """API-level tests for stale ticket info endpoint."""
+
+    @pytest.fixture
+    def client(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SAP_DATA_ROOT", str(tmp_path))
+        import src.web.dependencies as deps
+        monkeypatch.setattr(deps, "DATA_ROOT", tmp_path)
+        from src.shared.client_manager import ClientManager
+        cm = ClientManager(tmp_path)
+        cm.register_client("TST", "Test Client")
+
+        from src.web.app import app
+        from starlette.testclient import TestClient
+        c = TestClient(app)
+        c.post("/api/session/client", json={"code": "TST"})
+        return c
+
+    def test_stale_info_endpoint(self, client, tmp_path):
+        resp = client.post("/api/kanban/tickets", json={"title": "Fresh ticket"})
+        assert resp.status_code == 200
+
+        resp = client.get("/api/kanban/stale-info?days=3")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["stale_count"] == 0
+        assert data["stale_ids"] == []
+
+    def test_stale_info_detects_old_tickets(self, client, tmp_path):
+        resp = client.post("/api/kanban/tickets", json={"title": "Will be old"})
+        assert resp.status_code == 200
+        ticket = resp.json()
+
+        # Age the ticket directly in DB
+        import sqlite3
+        db_path = tmp_path / "clients" / "TST" / "kanban.sqlite"
+        old_date = (datetime.now(UTC) - timedelta(days=5)).isoformat()
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("UPDATE tickets SET updated_at = ? WHERE id = ?", (old_date, ticket["id"]))
+
+        resp = client.get("/api/kanban/stale-info?days=3")
+        data = resp.json()
+        assert data["stale_count"] == 1
+        assert ticket["id"] in data["stale_ids"]
+
+
+class TestStaleDaysSettingAPI:
+    """API-level tests for stale-days setting."""
+
+    @pytest.fixture
+    def client(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SAP_DATA_ROOT", str(tmp_path))
+        import src.web.dependencies as deps
+        monkeypatch.setattr(deps, "DATA_ROOT", tmp_path)
+
+        from src.web.app import app
+        from starlette.testclient import TestClient
+        return TestClient(app)
+
+    def test_set_stale_days(self, client):
+        resp = client.post("/api/settings/stale-days", json={"days": 7})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["days"] == 7
+        assert data["status"] == "ok"
+
+    def test_set_stale_days_invalid(self, client):
+        resp = client.post("/api/settings/stale-days", json={"days": 0})
+        assert resp.status_code == 400
+
+        resp = client.post("/api/settings/stale-days", json={"days": "abc"})
+        assert resp.status_code == 400

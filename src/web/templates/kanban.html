@@ -54,6 +54,11 @@
     <span class="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap" x-text="activeTicketCount + ' tickets activos'"></span>
   </div>
 
+  <!-- Stale tickets banner -->
+  <div x-show="staleCount > 0" class="mb-3 px-4 py-2 rounded-lg bg-amber-100 dark:bg-amber-900/50 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 text-sm">
+    <span x-text="staleCount + ' ticket(s) llevan mas de ' + staleDays + ' dias sin movimiento'"></span>
+  </div>
+
   <!-- Board columns -->
   <div class="flex gap-3 h-[calc(100%-3.5rem)] overflow-x-auto pb-2" id="columns-container" x-init="initColumnSortable()">
     <template x-for="col in visibleColumns()" :key="col.id">
@@ -99,7 +104,7 @@
              x-init="initSortable($el, col.name)">
           <template x-for="ticket in ticketsByCol(col.name)" :key="ticket.id">
             <div class="bg-white dark:bg-gray-700 rounded-lg shadow-sm p-3 cursor-grab active:cursor-grabbing border-l-4 border border-gray-200 dark:border-gray-600"
-                 :class="priorityBorderClass(ticket.priority)"
+                 :class="isStale(ticket.id) ? 'border-l-amber-500 bg-amber-50/30 dark:bg-amber-900/10' : priorityBorderClass(ticket.priority)"
                  :data-id="ticket.id"
                  :data-client="ticket.client_code || ''"
                  @click="selectTicket(ticket)">
@@ -125,7 +130,7 @@
                     <span class="bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-300 text-xs px-1.5 py-0.5 rounded" x-text="tag"></span>
                   </template>
                 </div>
-                <span class="text-xs text-gray-400 dark:text-gray-500" x-text="timeAgo(ticket.updated_at)"></span>
+                <span class="text-xs" :class="isStale(ticket.id) ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-gray-400 dark:text-gray-500'" x-text="timeAgo(ticket.updated_at)"></span>
               </div>
             </div>
           </template>
@@ -313,6 +318,9 @@ function kanbanApp() {
     hideClosed: false,
     searchQuery: '',
     filterPriority: '',
+    staleCount: 0,
+    staleIds: [],
+    staleDays: {{ stale_ticket_days }},
 
     get activeTicketCount() {
       return this.tickets.filter(t => t.status !== 'CERRADO').length;
@@ -358,6 +366,10 @@ function kanbanApp() {
       return this.tickets.filter(t => t.status === colName);
     },
 
+    isStale(ticketId) {
+      return this.staleIds.indexOf(ticketId) !== -1;
+    },
+
     renderMarkdown(text) {
       if (!text) return '';
       try {
@@ -394,14 +406,18 @@ function kanbanApp() {
       if (this.filterPriority) params.set('priority', this.filterPriority);
       const qs = params.toString() ? '?' + params.toString() : '';
 
-      const [colResp, ticketResp] = await Promise.all([
+      const [colResp, ticketResp, staleResp] = await Promise.all([
         fetch('/api/kanban/columns'),
         fetch('/api/kanban/tickets' + qs),
+        fetch('/api/kanban/stale-info?days=' + this.staleDays),
       ]);
       this.columns = await colResp.json();
       const data = await ticketResp.json();
       this.tickets = data.tickets;
       this.totalTickets = data.total;
+      const staleData = await staleResp.json();
+      this.staleCount = staleData.stale_count;
+      this.staleIds = staleData.stale_ids;
     },
 
     async createTicket() {

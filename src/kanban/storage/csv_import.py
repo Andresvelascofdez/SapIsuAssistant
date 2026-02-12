@@ -56,7 +56,8 @@ def import_tickets_from_csv(csv_path: Path, data_root: Path) -> dict:
             cm.register_client(code, code)
 
     counts = {}
-    for row in rows:
+    errors = []
+    for row_idx, row in enumerate(rows, start=1):
         code = row.get("Cliente", "").strip().upper()
         if not code:
             continue
@@ -67,6 +68,11 @@ def import_tickets_from_csv(csv_path: Path, data_root: Path) -> dict:
         ticket_id = row.get("ID Tarea", "").strip() or None
         title = row.get("Nombre de tarea", "").strip()
         if not title:
+            continue
+
+        # Check for duplicate ticket_id
+        if ticket_id and repo.ticket_id_exists(ticket_id):
+            errors.append({"row": row_idx, "ticket_id": ticket_id, "reason": "duplicate"})
             continue
 
         estado = row.get("Estado", "").strip()
@@ -107,4 +113,4 @@ def import_tickets_from_csv(csv_path: Path, data_root: Path) -> dict:
 
         counts[code] = counts.get(code, 0) + 1
 
-    return {"total": sum(counts.values()), "per_client": counts}
+    return {"total": sum(counts.values()), "per_client": counts, "errors": errors}

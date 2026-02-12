@@ -76,3 +76,13 @@ async def toggle_standard_kb(request: Request):
     enabled = body.get("enabled", True)
     request.session["standard_kb_enabled"] = enabled
     return {"standard_kb_enabled": enabled}
+
+
+@router.post("/api/settings/stale-days")
+async def set_stale_days(request: Request):
+    body = await request.json()
+    days = body.get("days")
+    if not isinstance(days, int) or days < 1:
+        return JSONResponse({"error": "days must be a positive integer."}, status_code=400)
+    request.session["stale_ticket_days"] = days
+    return {"status": "ok", "days": days}
