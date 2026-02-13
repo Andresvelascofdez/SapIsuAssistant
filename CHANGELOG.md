@@ -1,5 +1,35 @@
 # Changelog
 
+## v0.3.0 (2026-02-13)
+
+### Finance Module (NEW)
+
+- **Settings**: Tasa impositiva por defecto, datos de empresa (nombre, direccion, CIF, email, telefono, datos bancarios)
+- **Categorias de gasto**: CRUD completo, reordenar, activar/desactivar, proteccion contra borrado si tiene gastos
+- **Gastos**: CRUD con periodo, categoria, importe, comerciante, notas, documento adjunto, flag "documento no requerido"
+- **Facturas**: CRUD con lineas de detalle, calculo automatico de subtotal/IVA/total, estados (PENDING/PAID)
+- **Generacion de PDF**: Facturas generadas como PDF con datos de empresa, cliente, lineas y totales
+- **Resumen financiero**: Vista mensual y anual con ingresos, gastos, beneficio, impuestos y neto
+- **Documentos**: Subida, descarga, hash SHA256, vinculacion a gastos (desvinculacion automatica al borrar)
+- **OCR**: Extraccion de texto desde PDF e imagenes, deteccion de importes y fechas (formato europeo incluido)
+- **Exportacion CSV**: Gastos y facturas exportables en formato CSV
+
+### Kanban - Mejoras
+
+- **ticket_id editable**: El identificador verde es editable en creacion y edicion, con validacion de unicidad
+- **Campo descripcion**: Los tickets ahora tienen un campo de descripcion ademas de las notas
+- **Alertas de tickets stale**: Indicador visual de tickets sin movimiento (dias configurables), filtra solo NO_ANALIZADO y EN_PROGRESO
+- **Modales unificados**: Creacion y edicion usan el mismo modal con tags y links
+- **Cliente en modal**: Dropdown de cliente visible en modal de detalle/edicion
+- **Drag-drop mejorado**: client_code incluido en respuestas API para movimiento fiable entre columnas
+- **History/Delete con client_code**: Endpoints aceptan client_code como query param
+
+### Tests - Suite Comprehensiva
+
+- **191 nuevos tests** en `tests/test_comprehensive.py` (410 tests totales en 3 archivos)
+- Cobertura: Ingest API, Review API, Settings API, ClientManager, KB Repository, Chat Repository, Kanban Repository, Kanban API, Finance edge cases, E2E workflows, validacion de inputs, error handling
+- Tests E2E: ciclo de vida completo de tickets, gastos, facturas, chat, aislamiento multi-cliente
+
 ## v0.2.3 (2026-02-11)
 
 ### Bugfix - Creacion de tickets Kanban
