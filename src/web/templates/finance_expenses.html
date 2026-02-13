@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+{% set active_tab = "finance/expenses" %}
+{% block content %}
+<div x-data="expensesApp()" x-init="loadData()" class="max-w-6xl mx-auto space-y-4">
+
+  <!-- Header + Filters -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+    <div class="flex flex-wrap items-center gap-4">
+      <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Expenses</h2>
+      <div class="flex items-center gap-2 ml-auto flex-wrap">
+        <select x-model.number="filterYear" @change="loadData()" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm">
+          <option :value="0">All years</option>
+          <template x-for="y in yearOptions" :key="y">
+            <option :value="y" x-text="y"></option>
+          </template>
+        </select>
+        <select x-model.number="filterMonth" @change="loadData()" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm">
+          <option :value="0">All months</option>
+          <template x-for="m in 12" :key="m">
+            <option :value="m" x-text="monthNames[m-1]"></option>
+          </template>
+        </select>
+        <select x-model.number="filterCategory" @change="loadData()" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm">
+          <option :value="0">All categories</option>
+          <template x-for="c in categories" :key="c.id">
+            <option :value="c.id" x-text="c.name"></option>
+          </template>
+        </select>
+        <a :href="csvExportUrl()" class="text-sm text-sap-600 dark:text-sap-400 hover:underline">Export CSV</a>
+        <button @click="openCreate()" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">New Expense</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Expenses Table -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+        <tr>
+          <th class="px-4 py-3 text-left font-medium">Period</th>
+          <th class="px-4 py-3 text-left font-medium">Category</th>
+          <th class="px-4 py-3 text-left font-medium">Merchant</th>
+          <th class="px-4 py-3 text-right font-medium">Amount (EUR)</th>
+          <th class="px-4 py-3 text-center font-medium">Doc</th>
+          <th class="px-4 py-3 text-center font-medium">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+        <template x-for="exp in expenses" :key="exp.id">
+          <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
+            <td class="px-4 py-3 text-gray-800 dark:text-gray-100" x-text="exp.period_year + '-' + String(exp.period_month).padStart(2, '0')"></td>
+            <td class="px-4 py-3 text-gray-600 dark:text-gray-300" x-text="exp.category_name"></td>
+            <td class="px-4 py-3 text-gray-600 dark:text-gray-300" x-text="exp.merchant || '—'"></td>
+            <td class="px-4 py-3 text-right font-mono text-gray-800 dark:text-gray-100" x-text="exp.amount.toFixed(2)"></td>
+            <td class="px-4 py-3 text-center">
+              <template x-if="exp.document_id">
+                <a :href="'/api/finance/documents/' + exp.document_id + '/download'" target="_blank" class="text-sap-600 dark:text-sap-400 hover:underline text-xs">View</a>
+              </template>
+              <template x-if="!exp.document_id && exp.document_not_required">
+                <span class="text-xs text-gray-400 dark:text-gray-500">N/A</span>
+              </template>
+              <template x-if="!exp.document_id && !exp.document_not_required">
+                <span class="text-xs text-red-500 dark:text-red-400 font-semibold">MISSING</span>
+              </template>
+            </td>
+            <td class="px-4 py-3 text-center">
+              <button @click="openEdit(exp)" class="text-sm text-sap-600 dark:text-sap-400 hover:underline mr-2">Edit</button>
+              <button @click="deleteExpense(exp.id)" class="text-sm text-red-600 dark:text-red-400 hover:underline">Delete</button>
+            </td>
+          </tr>
+        </template>
+        <tr x-show="expenses.length === 0">
+          <td colspan="6" class="px-4 py-8 text-center text-gray-400 dark:text-gray-500 text-sm">No expenses found.</td>
+        </tr>
+      </tbody>
+      <tfoot class="bg-gray-50 dark:bg-gray-700 font-semibold">
+        <tr>
+          <td colspan="3" class="px-4 py-3 text-gray-700 dark:text-gray-200">Total</td>
+          <td class="px-4 py-3 text-right font-mono text-gray-800 dark:text-gray-100" x-text="total.toFixed(2)"></td>
+          <td colspan="2" class="px-4 py-3 text-center text-xs text-gray-400 dark:text-gray-500" x-text="expenseCount + ' expense(s)'"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- Create/Edit Modal -->
+  <div x-show="showModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showModal = false" x-transition>
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 w-full max-w-lg mx-4 p-6" @click.stop>
+      <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4" x-text="editingId ? 'Edit Expense' : 'New Expense'"></h3>
+      <div class="space-y-4">
+        <!-- Period -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Year</label>
+            <select x-model.number="form.period_year" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+              <template x-for="y in yearOptions" :key="y">
+                <option :value="y" x-text="y"></option>
+              </template>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Month</label>
+            <select x-model.number="form.period_month" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+              <template x-for="m in 12" :key="m">
+                <option :value="m" x-text="monthNames[m-1]"></option>
+              </template>
+            </select>
+          </div>
+        </div>
+        <!-- Category -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
+          <select x-model.number="form.category_id" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+            <template x-for="c in categories" :key="c.id">
+              <option :value="c.id" x-text="c.name"></option>
+            </template>
+          </select>
+        </div>
+        <!-- Amount -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Amount (EUR)</label>
+          <input x-model.number="form.amount" type="number" step="0.01" min="0"
+                 class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+        </div>
+        <!-- Merchant -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Merchant (optional)</label>
+          <input x-model="form.merchant" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+        </div>
+        <!-- Notes -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes (optional)</label>
+          <textarea x-model="form.notes" rows="2" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm"></textarea>
+        </div>
+        <!-- File upload -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Document (optional)</label>
+          <template x-if="form.document_id">
+            <div class="flex items-center gap-2 text-sm">
+              <span class="text-green-600 dark:text-green-400">Document attached</span>
+              <button @click="form.document_id = null" class="text-red-600 dark:text-red-400 hover:underline text-xs">Remove</button>
+            </div>
+          </template>
+          <template x-if="!form.document_id">
+            <input type="file" @change="uploadFile($event)" class="text-sm text-gray-600 dark:text-gray-300">
+          </template>
+          <span x-show="uploading" class="text-xs text-gray-400 dark:text-gray-500">Uploading...</span>
+        </div>
+        <!-- Document not required -->
+        <div class="flex items-center gap-2">
+          <input type="checkbox" x-model="form.document_not_required" id="docNotReq" class="rounded border-gray-300 dark:border-gray-600">
+          <label for="docNotReq" class="text-sm text-gray-700 dark:text-gray-300">Document not required</label>
+        </div>
+      </div>
+      <div x-show="formError" class="mt-3 text-sm text-red-600 dark:text-red-400" x-text="formError"></div>
+      <div class="mt-6 flex justify-end gap-3">
+        <button @click="showModal = false" class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition">Cancel</button>
+        <button @click="saveExpense()" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sub-navigation -->
+  <div class="flex gap-4 text-sm">
+    <a href="/finance/settings" class="text-sap-600 dark:text-sap-400 hover:underline">Finance Settings</a>
+  </div>
+</div>
+
+<script>
+function expensesApp() {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const yearOptions = [];
+  for (let y = currentYear - 5; y <= currentYear + 1; y++) yearOptions.push(y);
+
+  return {
+    expenses: [],
+    categories: [],
+    total: 0,
+    expenseCount: 0,
+    filterYear: currentYear,
+    filterMonth: 0,
+    filterCategory: 0,
+    yearOptions,
+    monthNames: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+    showModal: false,
+    editingId: null,
+    uploading: false,
+    formError: '',
+    form: {
+      period_year: currentYear,
+      period_month: now.getMonth() + 1,
+      category_id: 0,
+      amount: 0,
+      merchant: '',
+      notes: '',
+      document_id: null,
+      document_not_required: false,
+    },
+
+    async loadData() {
+      const catsResp = await fetch('/api/finance/categories');
+      this.categories = await catsResp.json();
+      if (this.form.category_id === 0 && this.categories.length > 0) {
+        this.form.category_id = this.categories[0].id;
+      }
+
+      let url = '/api/finance/expenses?';
+      if (this.filterYear) url += 'year=' + this.filterYear + '&';
+      if (this.filterMonth) url += 'month=' + this.filterMonth + '&';
+      if (this.filterCategory) url += 'category_id=' + this.filterCategory + '&';
+      const resp = await fetch(url);
+      const data = await resp.json();
+      this.expenses = data.expenses;
+      this.total = data.total;
+      this.expenseCount = data.count;
+    },
+
+    csvExportUrl() {
+      let url = '/api/finance/expenses/export-csv?';
+      if (this.filterYear) url += 'year=' + this.filterYear + '&';
+      if (this.filterMonth) url += 'month=' + this.filterMonth + '&';
+      return url;
+    },
+
+    openCreate() {
+      this.editingId = null;
+      this.formError = '';
+      this.form = {
+        period_year: this.filterYear || currentYear,
+        period_month: this.filterMonth || (now.getMonth() + 1),
+        category_id: this.categories.length > 0 ? this.categories[0].id : 0,
+        amount: 0,
+        merchant: '',
+        notes: '',
+        document_id: null,
+        document_not_required: false,
+      };
+      this.showModal = true;
+    },
+
+    openEdit(exp) {
+      this.editingId = exp.id;
+      this.formError = '';
+      this.form = {
+        period_year: exp.period_year,
+        period_month: exp.period_month,
+        category_id: exp.category_id,
+        amount: exp.amount,
+        merchant: exp.merchant || '',
+        notes: exp.notes || '',
+        document_id: exp.document_id,
+        document_not_required: exp.document_not_required,
+      };
+      this.showModal = true;
+    },
+
+    async uploadFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      this.uploading = true;
+      const fd = new FormData();
+      fd.append('file', file);
+      const resp = await fetch('/api/finance/upload', {method: 'POST', body: fd});
+      const doc = await resp.json();
+      this.form.document_id = doc.id;
+      this.uploading = false;
+    },
+
+    async saveExpense() {
+      this.formError = '';
+      if (!this.form.amount || this.form.amount <= 0) {
+        this.formError = 'Amount must be positive.';
+        return;
+      }
+      if (!this.form.category_id) {
+        this.formError = 'Select a category.';
+        return;
+      }
+      const payload = {
+        period_year: this.form.period_year,
+        period_month: this.form.period_month,
+        category_id: this.form.category_id,
+        amount: this.form.amount,
+        merchant: this.form.merchant || null,
+        notes: this.form.notes || null,
+        document_id: this.form.document_id,
+        document_not_required: this.form.document_not_required,
+      };
+      let resp;
+      if (this.editingId) {
+        resp = await fetch('/api/finance/expenses/' + this.editingId, {
+          method: 'PUT',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload),
+        });
+      } else {
+        resp = await fetch('/api/finance/expenses', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload),
+        });
+      }
+      if (!resp.ok) {
+        const d = await resp.json().catch(() => ({}));
+        this.formError = d.error || 'Error saving expense.';
+        return;
+      }
+      this.showModal = false;
+      await this.loadData();
+    },
+
+    async deleteExpense(id) {
+      await fetch('/api/finance/expenses/' + id, {method: 'DELETE'});
+      await this.loadData();
+    },
+  }
+}
+</script>
+{% endblock %}

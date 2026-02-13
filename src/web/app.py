@@ -61,12 +61,13 @@ app.add_middleware(SessionMiddleware, secret_key=_get_session_secret())
 app.mount("/static", StaticFiles(directory=_HERE / "static"), name="static")
 
 # Import and include routers
-from src.web.routers import settings, kanban, review, ingest, chat  # noqa: E402
+from src.web.routers import settings, kanban, review, ingest, chat, finance  # noqa: E402
 
 app.include_router(chat.router)
 app.include_router(ingest.router)
 app.include_router(review.router)
 app.include_router(kanban.router)
+app.include_router(finance.router)
 app.include_router(settings.router)
 
 

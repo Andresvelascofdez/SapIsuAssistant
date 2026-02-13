@@ -63,3 +63,10 @@ def get_template_context(request: Request) -> dict:
         "chat_retention_days": state.chat_retention_days,
         "stale_ticket_days": state.stale_ticket_days,
     }
+
+
+def get_finance_repository():
+    """Get FinanceRepository instance for global finance data."""
+    from src.finance.storage.finance_repository import FinanceRepository
+    DATA_ROOT.mkdir(parents=True, exist_ok=True)
+    return FinanceRepository(DATA_ROOT / "finance.sqlite")
