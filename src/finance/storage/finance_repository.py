@@ -206,6 +206,26 @@ class FinanceRepository:
                 CREATE INDEX IF NOT EXISTS idx_invoices_period
                 ON invoices(period_year, period_month)
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS received_invoices (
+                    id TEXT PRIMARY KEY,
+                    period_year INTEGER NOT NULL,
+                    period_month INTEGER NOT NULL,
+                    issuer_name TEXT NOT NULL,
+                    invoice_number TEXT,
+                    amount REAL NOT NULL DEFAULT 0.0,
+                    currency TEXT NOT NULL DEFAULT 'EUR',
+                    notes TEXT,
+                    document_id TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY (document_id) REFERENCES documents(id)
+                )
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_received_invoices_period
+                ON received_invoices(period_year, period_month)
+            """)
 
             # Seed defaults
             settings_count = conn.execute("SELECT COUNT(*) FROM finance_settings").fetchone()[0]
@@ -354,8 +374,9 @@ class FinanceRepository:
 
     def delete_document(self, doc_id: str) -> bool:
         with sqlite3.connect(self.db_path) as conn:
-            # Unlink from expenses
+            # Unlink from expenses and received invoices
             conn.execute("UPDATE expenses SET document_id = NULL WHERE document_id = ?", (doc_id,))
+            conn.execute("UPDATE received_invoices SET document_id = NULL WHERE document_id = ?", (doc_id,))
             deleted = conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,)).rowcount
             conn.commit()
             return deleted > 0
@@ -716,14 +737,21 @@ class FinanceRepository:
     # ── Summaries ──
 
     def get_monthly_summary(self, year: int, month: int, tax_rate: float | None = None) -> dict:
-        """Return income/expense/profit summary for a single month."""
+        """Return income/expense/profit summary for a single month.
+
+        profit = incomes - expenses
+        tax = incomes * tax_rate (if incomes > 0)
+        net = incomes - tax  (personal: expenses are personal, not deducted)
+        net_business = incomes - expenses - tax  (business: expenses deducted)
+        """
         if tax_rate is None:
             tax_rate = self.get_settings().tax_rate_default
         incomes = self.sum_invoices(year=year, month=month)
         expenses = self.sum_expenses(year=year, month=month)
         profit = _round2(incomes - expenses)
-        tax = _round2(profit * tax_rate) if profit > 0 else 0.0
-        net = _round2(profit - tax)
+        tax = _round2(incomes * tax_rate) if incomes > 0 else 0.0
+        net = _round2(incomes - tax)
+        net_business = _round2(incomes - expenses - tax)
         return {
             "year": year,
             "month": month,
@@ -733,6 +761,7 @@ class FinanceRepository:
             "tax_rate": tax_rate,
             "tax": tax,
             "net": net,
+            "net_business": net_business,
         }
 
     def get_yearly_summary(self, year: int, tax_rate: float | None = None) -> list[dict]:

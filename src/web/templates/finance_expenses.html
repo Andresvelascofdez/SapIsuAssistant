@@ -16,27 +16,27 @@
   <!-- Header + Filters -->
   <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
     <div class="flex flex-wrap items-center gap-4">
-      <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Expenses</h2>
+      <h2 class="text-lg font-semibold text-gray-800 dark:text-white">Expenses</h2>
       <div class="flex items-center gap-2 ml-auto flex-wrap">
-        <select x-model.number="filterYear" @change="loadData()" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm">
-          <option :value="0">All years</option>
-          <template x-for="y in yearOptions" :key="y">
-            <option :value="y" x-text="y"></option>
-          </template>
-        </select>
-        <select x-model.number="filterMonth" @change="loadData()" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm">
+        <div class="flex items-center gap-1">
+          <input type="number" :value="filterYear || ''" @input="filterYear = parseInt($event.target.value) || 0" @change="loadData()" placeholder="All years" min="2000" max="2100"
+                 class="w-24 border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg px-3 py-1.5 text-sm">
+          <button x-show="filterYear" @click="filterYear = 0; loadData()" class="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300" title="Show all years">All</button>
+        </div>
+        <select x-model.number="filterMonth" @change="loadData()" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg px-3 py-1.5 text-sm">
           <option :value="0">All months</option>
           <template x-for="m in 12" :key="m">
             <option :value="m" x-text="monthNames[m-1]"></option>
           </template>
         </select>
-        <select x-model.number="filterCategory" @change="loadData()" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm">
+        <select x-model.number="filterCategory" @change="loadData()" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg px-3 py-1.5 text-sm">
           <option :value="0">All categories</option>
           <template x-for="c in categories" :key="c.id">
             <option :value="c.id" x-text="c.name"></option>
           </template>
         </select>
         <a :href="csvExportUrl()" class="text-sm text-sap-600 dark:text-sap-400 hover:underline">Export CSV</a>
+        <button @click="showBulk = !showBulk" class="border border-sap-600 text-sap-600 dark:text-sap-400 dark:border-sap-400 hover:bg-sap-50 dark:hover:bg-sap-900/20 px-4 py-2 rounded-lg text-sm font-medium transition" x-text="showBulk ? 'Cancel Bulk' : 'Bulk Import'"></button>
         <button @click="openCreate()" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">New Expense</button>
       </div>
     </div>
@@ -44,25 +44,49 @@
 
   <!-- Expenses Table -->
   <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+
+    <!-- Bulk Import -->
+    <div x-show="showBulk" class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50" x-transition>
+      <h3 class="text-sm font-semibold text-gray-800 dark:text-white mb-2">Bulk Import Expenses</h3>
+      <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Select multiple PDF/image files. Each file will create an expense with the amount auto-detected via OCR. You can edit each expense afterwards.</p>
+      <div class="flex items-center gap-3">
+        <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png" @change="bulkFiles = $event.target.files" class="text-sm text-gray-600 dark:text-gray-300">
+        <button x-show="bulkFiles && bulkFiles.length > 0 && !bulkUploading" @click="bulkImport()"
+                class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+                x-text="'Upload ' + (bulkFiles ? bulkFiles.length : 0) + ' file(s)'"></button>
+        <span x-show="bulkUploading" class="text-xs text-amber-600 dark:text-amber-400" x-text="'Processing ' + bulkProgress + '...'"></span>
+      </div>
+      <div x-show="bulkResults.length > 0" class="mt-3 space-y-1">
+        <template x-for="r in bulkResults" :key="r.expense_id">
+          <div class="flex items-center gap-2 text-xs">
+            <span class="text-green-600 dark:text-green-400">OK</span>
+            <span class="text-gray-600 dark:text-gray-300" x-text="r.file_name"></span>
+            <span class="font-mono text-gray-800 dark:text-white" x-text="r.amount.toFixed(2) + ' EUR'"></span>
+            <span class="text-gray-400 dark:text-gray-500" x-text="r.period"></span>
+          </div>
+        </template>
+      </div>
+    </div>
+
     <table class="w-full text-sm">
       <thead class="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
         <tr>
           <th class="px-4 py-3 text-left font-medium">Period</th>
           <th class="px-4 py-3 text-left font-medium">Category</th>
           <th class="px-4 py-3 text-left font-medium">Merchant</th>
-          <th class="px-4 py-3 text-right font-medium">Amount (EUR)</th>
-          <th class="px-4 py-3 text-center font-medium">Doc</th>
-          <th class="px-4 py-3 text-center font-medium">Actions</th>
+          <th class="px-4 py-3 text-left font-medium">Amount (EUR)</th>
+          <th class="px-4 py-3 text-left font-medium">Doc</th>
+          <th class="px-4 py-3 text-left font-medium">Actions</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
         <template x-for="exp in expenses" :key="exp.id">
           <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
-            <td class="px-4 py-3 text-gray-800 dark:text-gray-100" x-text="exp.period_year + '-' + String(exp.period_month).padStart(2, '0')"></td>
+            <td class="px-4 py-3 text-gray-800 dark:text-white" x-text="exp.period_year + '-' + String(exp.period_month).padStart(2, '0')"></td>
             <td class="px-4 py-3 text-gray-600 dark:text-gray-300" x-text="exp.category_name"></td>
             <td class="px-4 py-3 text-gray-600 dark:text-gray-300" x-text="exp.merchant || '—'"></td>
-            <td class="px-4 py-3 text-right font-mono text-gray-800 dark:text-gray-100" x-text="exp.amount.toFixed(2)"></td>
-            <td class="px-4 py-3 text-center">
+            <td class="px-4 py-3 text-left font-mono text-gray-800 dark:text-white" x-text="exp.amount.toFixed(2)"></td>
+            <td class="px-4 py-3 text-left">
               <template x-if="exp.document_id">
                 <a :href="'/api/finance/documents/' + exp.document_id + '/download'" target="_blank" class="text-sap-600 dark:text-sap-400 hover:underline text-xs">View</a>
               </template>
@@ -73,7 +97,7 @@
                 <span class="text-xs text-red-500 dark:text-red-400 font-semibold">MISSING</span>
               </template>
             </td>
-            <td class="px-4 py-3 text-center">
+            <td class="px-4 py-3 text-left">
               <button @click="openEdit(exp)" class="text-sm text-sap-600 dark:text-sap-400 hover:underline mr-2">Edit</button>
               <button @click="deleteExpense(exp.id)" class="text-sm text-red-600 dark:text-red-400 hover:underline">Delete</button>
             </td>
@@ -85,9 +109,9 @@
       </tbody>
       <tfoot class="bg-gray-50 dark:bg-gray-700 font-semibold">
         <tr>
-          <td colspan="3" class="px-4 py-3 text-gray-700 dark:text-gray-200">Total</td>
-          <td class="px-4 py-3 text-right font-mono text-gray-800 dark:text-gray-100" x-text="total.toFixed(2)"></td>
-          <td colspan="2" class="px-4 py-3 text-center text-xs text-gray-400 dark:text-gray-500" x-text="expenseCount + ' expense(s)'"></td>
+          <td colspan="3" class="px-4 py-3 text-gray-700 dark:text-white">Total</td>
+          <td class="px-4 py-3 text-left font-mono text-gray-800 dark:text-white" x-text="total.toFixed(2)"></td>
+          <td colspan="2" class="px-4 py-3 text-left text-xs text-gray-400 dark:text-gray-500" x-text="expenseCount + ' expense(s)'"></td>
         </tr>
       </tfoot>
     </table>
@@ -96,21 +120,18 @@
   <!-- Create/Edit Modal -->
   <div x-show="showModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showModal = false" x-transition>
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 w-full max-w-lg mx-4 p-6" @click.stop>
-      <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4" x-text="editingId ? 'Edit Expense' : 'New Expense'"></h3>
+      <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4" x-text="editingId ? 'Edit Expense' : 'New Expense'"></h3>
       <div class="space-y-4">
         <!-- Period -->
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Year</label>
-            <select x-model.number="form.period_year" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
-              <template x-for="y in yearOptions" :key="y">
-                <option :value="y" x-text="y"></option>
-              </template>
-            </select>
+            <input type="number" x-model.number="form.period_year" min="2000" max="2100"
+                   class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg px-3 py-2 text-sm">
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Month</label>
-            <select x-model.number="form.period_month" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+            <select x-model.number="form.period_month" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg px-3 py-2 text-sm">
               <template x-for="m in 12" :key="m">
                 <option :value="m" x-text="monthNames[m-1]"></option>
               </template>
@@ -120,7 +141,7 @@
         <!-- Category -->
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
-          <select x-model.number="form.category_id" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+          <select x-model.number="form.category_id" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg px-3 py-2 text-sm">
             <template x-for="c in categories" :key="c.id">
               <option :value="c.id" x-text="c.name"></option>
             </template>
@@ -130,17 +151,17 @@
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Amount (EUR)</label>
           <input x-model.number="form.amount" type="number" step="0.01" min="0"
-                 class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+                 class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg px-3 py-2 text-sm">
         </div>
         <!-- Merchant -->
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Merchant (optional)</label>
-          <input x-model="form.merchant" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+          <input x-model="form.merchant" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg px-3 py-2 text-sm">
         </div>
         <!-- Notes -->
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes (optional)</label>
-          <textarea x-model="form.notes" rows="2" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm"></textarea>
+          <textarea x-model="form.notes" rows="2" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg px-3 py-2 text-sm"></textarea>
         </div>
         <!-- File upload -->
         <div>
@@ -176,8 +197,6 @@
 function expensesApp() {
   const now = new Date();
   const currentYear = now.getFullYear();
-  const yearOptions = [];
-  for (let y = currentYear - 5; y <= currentYear + 1; y++) yearOptions.push(y);
 
   return {
     expenses: [],
@@ -187,12 +206,16 @@ function expensesApp() {
     filterYear: currentYear,
     filterMonth: 0,
     filterCategory: 0,
-    yearOptions,
     monthNames: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
     showModal: false,
     editingId: null,
     uploading: false,
     formError: '',
+    showBulk: false,
+    bulkUploading: false,
+    bulkProgress: '',
+    bulkResults: [],
+    bulkFiles: null,
     form: {
       period_year: currentYear,
       period_month: now.getMonth() + 1,
@@ -318,6 +341,28 @@ function expensesApp() {
 
     async deleteExpense(id) {
       await fetch('/api/finance/expenses/' + id, {method: 'DELETE'});
+      await this.loadData();
+    },
+
+    async bulkImport() {
+      const files = this.bulkFiles;
+      if (!files || files.length === 0) return;
+      this.bulkUploading = true;
+      this.bulkResults = [];
+      this.bulkProgress = files.length + ' files';
+      const fd = new FormData();
+      for (let i = 0; i < files.length; i++) {
+        fd.append('files', files[i]);
+      }
+      try {
+        const resp = await fetch('/api/finance/expenses/bulk-import', {method: 'POST', body: fd});
+        if (resp.ok) {
+          const data = await resp.json();
+          this.bulkResults = data.expenses;
+        }
+      } catch (e) {}
+      this.bulkUploading = false;
+      this.bulkFiles = null;
       await this.loadData();
     },
   }

@@ -13,6 +13,19 @@
 - **Documentos**: Subida, descarga, hash SHA256, vinculacion a gastos (desvinculacion automatica al borrar)
 - **OCR**: Extraccion de texto desde PDF e imagenes, deteccion de importes y fechas (formato europeo incluido)
 - **Exportacion CSV**: Gastos y facturas exportables en formato CSV
+- **Bulk import gastos**: Subida multiple de PDFs/imagenes con deteccion automatica de importes via OCR
+- **Bulk import facturas**: Subida multiple de PDFs/imagenes con creacion automatica de facturas
+- **Mark All Paid**: Boton para marcar todas las facturas pendientes como pagadas de una vez
+- **Net - Personal / Net - Business**: Doble columna en resumen financiero:
+  - Net - Personal = ingresos - impuestos (gastos son personales, no se deducen)
+  - Net - Business = ingresos - gastos - impuestos (vision empresarial)
+- **Navegacion por pestanas**: Tabs consistentes (Summary, Expenses, Invoices, Settings) en todas las paginas finance
+
+### Finance - UI / Dark Mode
+
+- **Alineacion izquierda**: Todas las columnas de tablas (headers y celdas) alineadas a la izquierda
+- **Dark mode mejorado**: Texto blanco y colores claros en modo oscuro para legibilidad
+- **CSS suplementario**: Utilidades Tailwind faltantes anadidas en base.html (text-left, dark:text-sap-400, dark:text-amber-400, grid responsive, etc.)
 
 ### Kanban - Mejoras
 
