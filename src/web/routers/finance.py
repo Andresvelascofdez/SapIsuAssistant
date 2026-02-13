@@ -353,6 +353,12 @@ def _invoice_item_to_dict(item):
 
 # ── Invoice Pages ──
 
+@router.get("/finance/summary")
+async def summary_page(request: Request):
+    ctx = get_template_context(request)
+    return templates.TemplateResponse("finance_summary.html", ctx)
+
+
 @router.get("/finance/invoices")
 async def invoices_page(request: Request):
     ctx = get_template_context(request)
@@ -523,3 +529,80 @@ async def generate_invoice_pdf_endpoint(invoice_id: str):
     result = _invoice_to_dict(updated)
     result["items"] = [_invoice_item_to_dict(i) for i in items]
     return result
+
+
+# ── Summary API ──
+
+@router.get("/api/finance/summary")
+async def get_summary(
+    year: int = Query(...),
+    month: int | None = Query(default=None),
+    tax_rate: float | None = Query(default=None),
+):
+    repo = get_finance_repository()
+    if month is not None:
+        summary = repo.get_monthly_summary(year, month, tax_rate)
+        return {"months": [summary]}
+    else:
+        months = repo.get_yearly_summary(year, tax_rate)
+        # Compute yearly totals
+        total_incomes = sum(m["incomes"] for m in months)
+        total_expenses = sum(m["expenses"] for m in months)
+        total_profit = round(total_incomes - total_expenses, 2)
+        effective_rate = months[0]["tax_rate"] if months else 0.15
+        total_tax = round(total_profit * effective_rate, 2) if total_profit > 0 else 0.0
+        total_net = round(total_profit - total_tax, 2)
+        return {
+            "months": months,
+            "totals": {
+                "incomes": total_incomes,
+                "expenses": total_expenses,
+                "profit": total_profit,
+                "tax_rate": effective_rate,
+                "tax": total_tax,
+                "net": total_net,
+            },
+        }
+
+
+# ── OCR API ──
+
+@router.post("/api/finance/ocr/{doc_id}")
+async def run_ocr(doc_id: str):
+    repo = get_finance_repository()
+    doc = repo.get_document(doc_id)
+    if not doc:
+        return JSONResponse({"error": "Document not found."}, status_code=404)
+
+    file_path = DATA_ROOT / doc.storage_path
+    if not file_path.exists():
+        return JSONResponse({"error": "File not found on disk."}, status_code=404)
+
+    from src.finance.ocr.ocr_service import extract_from_image, extract_from_pdf
+
+    mime = doc.mime_type.lower()
+    if mime == "application/pdf":
+        result = extract_from_pdf(file_path)
+    elif mime.startswith("image/"):
+        result = extract_from_image(file_path)
+    else:
+        return JSONResponse({"error": f"Unsupported mime type: {mime}"}, status_code=400)
+
+    # Store OCR results in document
+    detected_date_iso = None
+    if result.get("suggested_year") and result.get("suggested_month"):
+        detected_date_iso = f"{result['suggested_year']}-{result['suggested_month']:02d}"
+
+    repo.update_document_ocr(
+        doc_id,
+        raw_text=result.get("raw_text"),
+        detected_amount=result.get("suggested_amount"),
+        detected_date_iso=detected_date_iso,
+    )
+
+    return {
+        "raw_text": result.get("raw_text", ""),
+        "suggested_amount": result.get("suggested_amount"),
+        "suggested_year": result.get("suggested_year"),
+        "suggested_month": result.get("suggested_month"),
+    }

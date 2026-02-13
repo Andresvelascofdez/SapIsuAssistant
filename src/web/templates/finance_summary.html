@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% set active_tab = "finance/summary" %}
+{% block content %}
+<div x-data="summaryApp()" x-init="loadData()" class="max-w-6xl mx-auto space-y-4">
+
+  <!-- Header + Filters -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+    <div class="flex flex-wrap items-center gap-4">
+      <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Financial Summary</h2>
+      <div class="flex items-center gap-2 ml-auto flex-wrap">
+        <select x-model.number="filterYear" @change="loadData()" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm">
+          <template x-for="y in yearOptions" :key="y">
+            <option :value="y" x-text="y"></option>
+          </template>
+        </select>
+        <select x-model.number="filterMonth" @change="loadData()" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm">
+          <option :value="0">Full year</option>
+          <template x-for="m in 12" :key="m">
+            <option :value="m" x-text="monthNames[m-1]"></option>
+          </template>
+        </select>
+        <div class="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-300">
+          <label>Tax %:</label>
+          <input x-model.number="taxPercent" type="number" step="0.5" min="0" max="100" @input="loadData()"
+                 class="w-16 border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-2 py-1.5 text-sm text-right">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary Cards (shown when single month or as yearly totals) -->
+  <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+      <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Incomes</div>
+      <div class="text-lg font-semibold font-mono text-green-600 dark:text-green-400" x-text="fmt(totals.incomes)"></div>
+    </div>
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+      <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Expenses</div>
+      <div class="text-lg font-semibold font-mono text-red-600 dark:text-red-400" x-text="fmt(totals.expenses)"></div>
+    </div>
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+      <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Profit</div>
+      <div class="text-lg font-semibold font-mono" :class="totals.profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'" x-text="fmt(totals.profit)"></div>
+    </div>
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+      <div class="text-xs text-gray-500 dark:text-gray-400 mb-1" x-text="'Tax (' + taxPercent + '%)'"></div>
+      <div class="text-lg font-semibold font-mono text-amber-600 dark:text-amber-400" x-text="fmt(totals.tax)"></div>
+    </div>
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+      <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Net</div>
+      <div class="text-lg font-semibold font-mono text-sap-600 dark:text-sap-400" x-text="fmt(totals.net)"></div>
+    </div>
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+      <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Tax Rate</div>
+      <div class="text-lg font-semibold font-mono text-gray-800 dark:text-gray-100" x-text="taxPercent + '%'"></div>
+    </div>
+  </div>
+
+  <!-- Monthly Breakdown Table (shown for yearly view) -->
+  <div x-show="filterMonth === 0" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+        <tr>
+          <th class="px-4 py-3 text-left font-medium">Month</th>
+          <th class="px-4 py-3 text-right font-medium">Incomes</th>
+          <th class="px-4 py-3 text-right font-medium">Expenses</th>
+          <th class="px-4 py-3 text-right font-medium">Profit</th>
+          <th class="px-4 py-3 text-right font-medium">Tax</th>
+          <th class="px-4 py-3 text-right font-medium">Net</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+        <template x-for="row in months" :key="row.month">
+          <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
+            <td class="px-4 py-3 text-gray-800 dark:text-gray-100" x-text="monthNames[row.month - 1]"></td>
+            <td class="px-4 py-3 text-right font-mono text-green-600 dark:text-green-400" x-text="fmt(row.incomes)"></td>
+            <td class="px-4 py-3 text-right font-mono text-red-600 dark:text-red-400" x-text="fmt(row.expenses)"></td>
+            <td class="px-4 py-3 text-right font-mono" :class="row.profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'" x-text="fmt(row.profit)"></td>
+            <td class="px-4 py-3 text-right font-mono text-amber-600 dark:text-amber-400" x-text="fmt(row.tax)"></td>
+            <td class="px-4 py-3 text-right font-mono text-gray-800 dark:text-gray-100" x-text="fmt(row.net)"></td>
+          </tr>
+        </template>
+      </tbody>
+      <tfoot class="bg-gray-50 dark:bg-gray-700 font-semibold">
+        <tr>
+          <td class="px-4 py-3 text-gray-700 dark:text-gray-200">Total</td>
+          <td class="px-4 py-3 text-right font-mono text-green-600 dark:text-green-400" x-text="fmt(totals.incomes)"></td>
+          <td class="px-4 py-3 text-right font-mono text-red-600 dark:text-red-400" x-text="fmt(totals.expenses)"></td>
+          <td class="px-4 py-3 text-right font-mono" :class="totals.profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'" x-text="fmt(totals.profit)"></td>
+          <td class="px-4 py-3 text-right font-mono text-amber-600 dark:text-amber-400" x-text="fmt(totals.tax)"></td>
+          <td class="px-4 py-3 text-right font-mono text-gray-800 dark:text-gray-100" x-text="fmt(totals.net)"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- Sub-navigation -->
+  <div class="flex gap-4 text-sm">
+    <a href="/finance/expenses" class="text-sap-600 dark:text-sap-400 hover:underline">Expenses</a>
+    <a href="/finance/invoices" class="text-sap-600 dark:text-sap-400 hover:underline">Invoices</a>
+    <a href="/finance/settings" class="text-sap-600 dark:text-sap-400 hover:underline">Finance Settings</a>
+  </div>
+</div>
+
+<script>
+function summaryApp() {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const yearOptions = [];
+  for (let y = currentYear - 5; y <= currentYear + 1; y++) yearOptions.push(y);
+
+  return {
+    months: [],
+    totals: {incomes: 0, expenses: 0, profit: 0, tax_rate: 0.15, tax: 0, net: 0},
+    filterYear: currentYear,
+    filterMonth: 0,
+    taxPercent: 15,
+    yearOptions,
+    monthNames: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+
+    fmt(v) {
+      return (v || 0).toFixed(2);
+    },
+
+    async loadData() {
+      let url = '/api/finance/summary?year=' + this.filterYear;
+      if (this.filterMonth) url += '&month=' + this.filterMonth;
+      url += '&tax_rate=' + (this.taxPercent / 100);
+      const resp = await fetch(url);
+      const data = await resp.json();
+      this.months = data.months || [];
+      if (data.totals) {
+        this.totals = data.totals;
+      } else if (this.months.length === 1) {
+        this.totals = this.months[0];
+      }
+    },
+  }
+}
+</script>
+{% endblock %}
