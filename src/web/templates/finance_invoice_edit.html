@@ -1,6 +1,16 @@
 {% extends "base.html" %}
 {% set active_tab = "finance/invoices" %}
 {% block content %}
+<!-- Finance Tabs -->
+<div class="max-w-4xl mx-auto mb-4">
+  <nav class="flex gap-1 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-1">
+    <a href="/finance/summary" class="px-4 py-2 rounded-lg text-sm font-medium transition text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Summary</a>
+    <a href="/finance/expenses" class="px-4 py-2 rounded-lg text-sm font-medium transition text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Expenses</a>
+    <a href="/finance/invoices" class="px-4 py-2 rounded-lg text-sm font-medium transition bg-sap-600 text-white">Invoices</a>
+    <a href="/finance/settings" class="px-4 py-2 rounded-lg text-sm font-medium transition text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Settings</a>
+  </nav>
+</div>
+
 <div x-data="invoiceEditApp()" x-init="loadData()" class="max-w-4xl mx-auto space-y-6">
 
   <div class="flex items-center gap-4 mb-2">
