@@ -1012,3 +1012,269 @@ class TestInvoiceAPI:
         assert "CSV Client" in content
         assert "CSV-001" in content
         assert "1210.00" in content  # total with 21% VAT on 1000
+
+
+# ── Repository: Summaries ──
+
+
+class TestSummary:
+    def test_monthly_summary_empty(self, tmp_path):
+        repo = FinanceRepository(tmp_path / "fin.db")
+        s = repo.get_monthly_summary(2025, 1)
+        assert s["incomes"] == 0.0
+        assert s["expenses"] == 0.0
+        assert s["profit"] == 0.0
+        assert s["tax"] == 0.0
+        assert s["net"] == 0.0
+        assert s["tax_rate"] == 0.15
+
+    def test_monthly_summary_with_data(self, tmp_path):
+        repo = FinanceRepository(tmp_path / "fin.db")
+        cats = repo.list_categories()
+        # Create invoice (income)
+        repo.create_invoice(
+            period_year=2025, period_month=3,
+            client_name="Client", invoice_number="INV-1",
+            items=[{"description": "Work", "quantity": 10, "unit_price": 100.0, "unit": "HOURS"}],
+        )
+        # Create expense
+        repo.create_expense(period_year=2025, period_month=3, category_id=cats[0].id, amount=300.0)
+        s = repo.get_monthly_summary(2025, 3)
+        assert s["incomes"] == 1000.0
+        assert s["expenses"] == 300.0
+        assert s["profit"] == 700.0
+        assert s["tax"] == _round2(700.0 * 0.15)  # 105.0
+        assert s["net"] == _round2(700.0 - 105.0)  # 595.0
+
+    def test_monthly_summary_custom_tax_rate(self, tmp_path):
+        repo = FinanceRepository(tmp_path / "fin.db")
+        cats = repo.list_categories()
+        repo.create_invoice(
+            period_year=2025, period_month=1,
+            client_name="A", invoice_number="I1",
+            items=[{"description": "Work", "quantity": 10, "unit_price": 100.0, "unit": "HOURS"}],
+        )
+        repo.create_expense(period_year=2025, period_month=1, category_id=cats[0].id, amount=200.0)
+        s = repo.get_monthly_summary(2025, 1, tax_rate=0.25)
+        assert s["profit"] == 800.0
+        assert s["tax_rate"] == 0.25
+        assert s["tax"] == _round2(800.0 * 0.25)  # 200.0
+        assert s["net"] == _round2(800.0 - 200.0)  # 600.0
+
+    def test_monthly_summary_negative_profit_no_tax(self, tmp_path):
+        repo = FinanceRepository(tmp_path / "fin.db")
+        cats = repo.list_categories()
+        # Only expenses, no income
+        repo.create_expense(period_year=2025, period_month=1, category_id=cats[0].id, amount=500.0)
+        s = repo.get_monthly_summary(2025, 1)
+        assert s["profit"] == -500.0
+        assert s["tax"] == 0.0  # no tax on negative profit
+        assert s["net"] == -500.0
+
+    def test_yearly_summary_returns_12_months(self, tmp_path):
+        repo = FinanceRepository(tmp_path / "fin.db")
+        months = repo.get_yearly_summary(2025)
+        assert len(months) == 12
+        assert months[0]["month"] == 1
+        assert months[11]["month"] == 12
+
+    def test_yearly_summary_with_data(self, tmp_path):
+        repo = FinanceRepository(tmp_path / "fin.db")
+        cats = repo.list_categories()
+        repo.create_invoice(
+            period_year=2025, period_month=3,
+            client_name="A", invoice_number="I1",
+            items=[{"description": "Work", "quantity": 10, "unit_price": 100.0, "unit": "HOURS"}],
+        )
+        repo.create_expense(period_year=2025, period_month=3, category_id=cats[0].id, amount=300.0)
+        months = repo.get_yearly_summary(2025)
+        march = months[2]  # 0-indexed, month 3
+        assert march["incomes"] == 1000.0
+        assert march["expenses"] == 300.0
+        assert march["profit"] == 700.0
+        # Other months should be zeros
+        assert months[0]["incomes"] == 0.0
+        assert months[0]["profit"] == 0.0
+
+
+# ── Web API: Summary ──
+
+
+class TestSummaryAPI:
+    @pytest.fixture
+    def client(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SAP_DATA_ROOT", str(tmp_path))
+        import src.web.dependencies as deps
+        monkeypatch.setattr(deps, "DATA_ROOT", tmp_path)
+
+        from src.web.app import app
+        from starlette.testclient import TestClient
+        return TestClient(app)
+
+    def test_summary_page_loads(self, client):
+        resp = client.get("/finance/summary")
+        assert resp.status_code == 200
+
+    def test_yearly_summary_api(self, client):
+        resp = client.get("/api/finance/summary?year=2025")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "months" in data
+        assert len(data["months"]) == 12
+        assert "totals" in data
+
+    def test_monthly_summary_api(self, client):
+        resp = client.get("/api/finance/summary?year=2025&month=3")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["months"]) == 1
+        assert data["months"][0]["month"] == 3
+
+    def test_summary_with_custom_tax_rate(self, client):
+        resp = client.get("/api/finance/summary?year=2025&tax_rate=0.25")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["totals"]["tax_rate"] == 0.25
+
+    def test_summary_with_data(self, client):
+        # Create an invoice (income)
+        client.post("/api/finance/invoices", json={
+            "period_year": 2025, "period_month": 3,
+            "client_name": "Client", "invoice_number": "INV-SUM",
+            "items": [{"description": "Work", "quantity": 10, "unit_price": 100.0, "unit": "HOURS"}],
+        })
+        # Create an expense
+        cats_resp = client.get("/api/finance/categories")
+        cat_id = cats_resp.json()[0]["id"]
+        client.post("/api/finance/expenses", json={
+            "period_year": 2025, "period_month": 3,
+            "category_id": cat_id, "amount": 300.0,
+        })
+        resp = client.get("/api/finance/summary?year=2025&month=3")
+        data = resp.json()
+        m = data["months"][0]
+        assert m["incomes"] == 1000.0
+        assert m["expenses"] == 300.0
+        assert m["profit"] == 700.0
+
+
+# ── OCR: Text Parsing ──
+
+
+class TestOCRParsing:
+    def test_extract_dates_iso(self):
+        from src.finance.ocr.ocr_service import _extract_dates
+        dates = _extract_dates("Invoice date: 2025-03-15")
+        assert (2025, 3) in dates
+
+    def test_extract_dates_european(self):
+        from src.finance.ocr.ocr_service import _extract_dates
+        dates = _extract_dates("Fecha: 15/03/2025")
+        assert (2025, 3) in dates
+
+    def test_extract_dates_dotted(self):
+        from src.finance.ocr.ocr_service import _extract_dates
+        dates = _extract_dates("Datum: 15.03.2025")
+        assert (2025, 3) in dates
+
+    def test_extract_dates_no_dates(self):
+        from src.finance.ocr.ocr_service import _extract_dates
+        dates = _extract_dates("No dates here")
+        assert len(dates) == 0
+
+    def test_extract_amounts_with_keyword(self):
+        from src.finance.ocr.ocr_service import _extract_amounts
+        amounts = _extract_amounts("TOTAL: 42.50")
+        assert 42.50 in amounts
+
+    def test_extract_amounts_eur(self):
+        from src.finance.ocr.ocr_service import _extract_amounts
+        amounts = _extract_amounts("EUR 1,234.56")
+        assert 1234.56 in amounts
+
+    def test_extract_amounts_european_format(self):
+        from src.finance.ocr.ocr_service import _extract_amounts
+        amounts = _extract_amounts("IMPORTE: 1.234,56")
+        assert 1234.56 in amounts
+
+    def test_extract_amounts_no_amounts(self):
+        from src.finance.ocr.ocr_service import _extract_amounts
+        amounts = _extract_amounts("No amounts here")
+        assert len(amounts) == 0
+
+    def test_parse_number_us_format(self):
+        from src.finance.ocr.ocr_service import _parse_number
+        assert _parse_number("1,234.56") == 1234.56
+
+    def test_parse_number_european_format(self):
+        from src.finance.ocr.ocr_service import _parse_number
+        assert _parse_number("1.234,56") == 1234.56
+
+    def test_parse_number_simple(self):
+        from src.finance.ocr.ocr_service import _parse_number
+        assert _parse_number("42.50") == 42.50
+
+    def test_parse_ocr_text(self):
+        from src.finance.ocr.ocr_service import _parse_ocr_text
+        result = _parse_ocr_text("Factura 2025-03-15\nTOTAL: 99.50\nOther text")
+        assert result["suggested_amount"] == 99.50
+        assert result["suggested_year"] == 2025
+        assert result["suggested_month"] == 3
+
+    def test_parse_ocr_text_empty(self):
+        from src.finance.ocr.ocr_service import _parse_ocr_text
+        result = _parse_ocr_text("")
+        assert result["raw_text"] == ""
+        assert result["suggested_amount"] is None
+        assert result["suggested_year"] is None
+
+    def test_pdf_text_extraction(self, tmp_path):
+        """Test OCR extract_from_pdf with a text-based PDF."""
+        # Create a simple PDF with text using reportlab
+        from reportlab.platypus import SimpleDocTemplate, Paragraph
+        from reportlab.lib.styles import getSampleStyleSheet
+
+        pdf_path = tmp_path / "test_ocr.pdf"
+        doc = SimpleDocTemplate(str(pdf_path))
+        styles = getSampleStyleSheet()
+        elements = [
+            Paragraph("Invoice 2025-06-15", styles["Normal"]),
+            Paragraph("TOTAL: 250.00 EUR", styles["Normal"]),
+        ]
+        doc.build(elements)
+
+        from src.finance.ocr.ocr_service import extract_from_pdf
+        result = extract_from_pdf(pdf_path)
+        assert result["raw_text"] != ""
+        assert result["suggested_amount"] is not None
+        assert result["suggested_year"] == 2025
+        assert result["suggested_month"] == 6
+
+
+# ── Web API: OCR ──
+
+
+class TestOCRAPI:
+    @pytest.fixture
+    def client(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SAP_DATA_ROOT", str(tmp_path))
+        import src.web.dependencies as deps
+        monkeypatch.setattr(deps, "DATA_ROOT", tmp_path)
+
+        from src.web.app import app
+        from starlette.testclient import TestClient
+        return TestClient(app)
+
+    def test_ocr_nonexistent_document(self, client):
+        resp = client.post("/api/finance/ocr/nonexistent")
+        assert resp.status_code == 404
+
+    def test_ocr_unsupported_mime_type(self, client):
+        # Upload a non-image, non-pdf file
+        resp = client.post(
+            "/api/finance/upload",
+            files={"file": ("data.csv", b"col1,col2\na,b", "text/csv")},
+        )
+        doc_id = resp.json()["id"]
+        resp = client.post(f"/api/finance/ocr/{doc_id}")
+        assert resp.status_code == 400

@@ -713,6 +713,36 @@ class FinanceRepository:
         self._recalculate_invoice_totals(invoice_id)
         return self.get_invoice_items(invoice_id)
 
+    # ── Summaries ──
+
+    def get_monthly_summary(self, year: int, month: int, tax_rate: float | None = None) -> dict:
+        """Return income/expense/profit summary for a single month."""
+        if tax_rate is None:
+            tax_rate = self.get_settings().tax_rate_default
+        incomes = self.sum_invoices(year=year, month=month)
+        expenses = self.sum_expenses(year=year, month=month)
+        profit = _round2(incomes - expenses)
+        tax = _round2(profit * tax_rate) if profit > 0 else 0.0
+        net = _round2(profit - tax)
+        return {
+            "year": year,
+            "month": month,
+            "incomes": incomes,
+            "expenses": expenses,
+            "profit": profit,
+            "tax_rate": tax_rate,
+            "tax": tax,
+            "net": net,
+        }
+
+    def get_yearly_summary(self, year: int, tax_rate: float | None = None) -> list[dict]:
+        """Return 12 monthly summaries for a given year."""
+        if tax_rate is None:
+            tax_rate = self.get_settings().tax_rate_default
+        return [self.get_monthly_summary(year, m, tax_rate) for m in range(1, 13)]
+
+    # ── Internal helpers ──
+
     def _recalculate_invoice_totals(self, invoice_id: str):
         """Recalculate subtotal, vat_amount, total for an invoice based on its items."""
         with sqlite3.connect(self.db_path) as conn:
