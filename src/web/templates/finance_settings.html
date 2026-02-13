@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% set active_tab = "finance/settings" %}
+{% block content %}
+<div x-data="financeSettingsApp()" x-init="loadData()" class="max-w-4xl mx-auto space-y-6">
+
+  <!-- Company Info -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Company Information</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Company Name</label>
+        <input x-model="settings.company_name" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tax ID</label>
+        <input x-model="settings.company_tax_id" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm" placeholder="e.g. ES12345678A">
+      </div>
+      <div class="md:col-span-2">
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Address</label>
+        <input x-model="settings.company_address" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+        <input x-model="settings.company_email" type="email" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone</label>
+        <input x-model="settings.company_phone" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+      </div>
+      <div class="md:col-span-2">
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Bank Details</label>
+        <textarea x-model="settings.company_bank_details" rows="2" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm"></textarea>
+      </div>
+    </div>
+    <div class="mt-4 flex items-center gap-4">
+      <button @click="saveSettings()" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">Save Company Info</button>
+      <span x-show="settingsMsg" class="text-sm text-green-600 dark:text-green-400" x-text="settingsMsg"></span>
+    </div>
+  </div>
+
+  <!-- Tax Rate -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Default Tax Rate</h2>
+    <p class="text-sm text-gray-600 dark:text-gray-300 mb-3">Used for profit/net calculations in summaries.</p>
+    <div class="flex gap-4 items-center">
+      <input x-model.number="taxRatePercent" type="number" min="0" max="100" step="0.5"
+             class="w-24 border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+      <span class="text-sm text-gray-500 dark:text-gray-400">%</span>
+      <button @click="saveTaxRate()" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">Save</button>
+      <span x-show="taxMsg" class="text-sm text-green-600 dark:text-green-400" x-text="taxMsg"></span>
+    </div>
+  </div>
+
+  <!-- Expense Categories -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Expense Categories</h2>
+
+    <!-- Add category -->
+    <div class="flex gap-4 mb-4">
+      <input x-model="newCategoryName" placeholder="New category name" @keydown.enter="addCategory()"
+             class="flex-1 border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+      <button @click="addCategory()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">Add</button>
+    </div>
+    <div x-show="catMsg" class="text-sm mb-3" :class="catMsgType === 'error' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'" x-text="catMsg"></div>
+
+    <!-- Category list -->
+    <div class="border dark:border-gray-700 rounded-lg divide-y dark:divide-gray-700">
+      <template x-for="cat in categories" :key="cat.id">
+        <div class="px-4 py-3 flex items-center gap-3">
+          <template x-if="editingCat !== cat.id">
+            <div class="flex items-center gap-3 flex-1">
+              <span class="text-sm font-medium text-gray-800 dark:text-gray-100 flex-1" x-text="cat.name"></span>
+              <span x-show="!cat.is_active" class="text-xs px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400">Inactive</span>
+              <button @click="editingCat = cat.id; editingCatName = cat.name" class="text-sm text-sap-600 dark:text-sap-400 hover:underline">Rename</button>
+              <button @click="toggleCat(cat)" class="text-sm hover:underline" :class="cat.is_active ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'" x-text="cat.is_active ? 'Deactivate' : 'Activate'"></button>
+              <button @click="deleteCat(cat)" class="text-sm text-red-600 dark:text-red-400 hover:underline">Delete</button>
+            </div>
+          </template>
+          <template x-if="editingCat === cat.id">
+            <div class="flex items-center gap-3 flex-1">
+              <input x-model="editingCatName" @keydown.enter="renameCat(cat)" @keydown.escape="editingCat = null"
+                     class="flex-1 border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm">
+              <button @click="renameCat(cat)" class="text-sm text-green-600 dark:text-green-400 hover:underline">Save</button>
+              <button @click="editingCat = null" class="text-sm text-gray-500 dark:text-gray-400 hover:underline">Cancel</button>
+            </div>
+          </template>
+        </div>
+      </template>
+      <div x-show="categories.length === 0" class="px-4 py-6 text-center text-sm text-gray-400 dark:text-gray-500">No categories.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+function financeSettingsApp() {
+  return {
+    settings: {},
+    settingsMsg: '',
+    taxRatePercent: 15,
+    taxMsg: '',
+    categories: [],
+    newCategoryName: '',
+    catMsg: '', catMsgType: 'success',
+    editingCat: null, editingCatName: '',
+
+    async loadData() {
+      const [settingsResp, catsResp] = await Promise.all([
+        fetch('/api/finance/settings'),
+        fetch('/api/finance/categories?active_only=false'),
+      ]);
+      this.settings = await settingsResp.json();
+      this.taxRatePercent = Math.round(this.settings.tax_rate_default * 10000) / 100;
+      this.categories = await catsResp.json();
+    },
+
+    async saveSettings() {
+      await fetch('/api/finance/settings', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          company_name: this.settings.company_name || '',
+          company_address: this.settings.company_address || '',
+          company_tax_id: this.settings.company_tax_id || null,
+          company_email: this.settings.company_email || null,
+          company_phone: this.settings.company_phone || null,
+          company_bank_details: this.settings.company_bank_details || null,
+        }),
+      });
+      this.settingsMsg = 'Company info saved.';
+      setTimeout(() => this.settingsMsg = '', 3000);
+    },
+
+    async saveTaxRate() {
+      const rate = this.taxRatePercent / 100;
+      await fetch('/api/finance/settings', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({tax_rate_default: rate}),
+      });
+      this.taxMsg = 'Tax rate saved.';
+      setTimeout(() => this.taxMsg = '', 3000);
+    },
+
+    async addCategory() {
+      this.catMsg = '';
+      if (!this.newCategoryName.trim()) return;
+      const resp = await fetch('/api/finance/categories', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: this.newCategoryName.trim()}),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { this.catMsg = data.error; this.catMsgType = 'error'; return; }
+      this.newCategoryName = '';
+      this.catMsg = 'Category added.'; this.catMsgType = 'success';
+      setTimeout(() => this.catMsg = '', 3000);
+      await this.loadData();
+    },
+
+    async renameCat(cat) {
+      this.catMsg = '';
+      if (!this.editingCatName.trim()) return;
+      const resp = await fetch('/api/finance/categories/' + cat.id, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: this.editingCatName.trim()}),
+      });
+      if (!resp.ok) { const d = await resp.json(); this.catMsg = d.error; this.catMsgType = 'error'; return; }
+      this.editingCat = null;
+      await this.loadData();
+    },
+
+    async toggleCat(cat) {
+      await fetch('/api/finance/categories/' + cat.id + '/toggle', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({active: !cat.is_active}),
+      });
+      await this.loadData();
+    },
+
+    async deleteCat(cat) {
+      this.catMsg = '';
+      const resp = await fetch('/api/finance/categories/' + cat.id, {method: 'DELETE'});
+      if (!resp.ok) { const d = await resp.json(); this.catMsg = d.error; this.catMsgType = 'error'; return; }
+      this.catMsg = 'Category deleted.'; this.catMsgType = 'success';
+      setTimeout(() => this.catMsg = '', 3000);
+      await this.loadData();
+    },
+  }
+}
+</script>
+{% endblock %}
