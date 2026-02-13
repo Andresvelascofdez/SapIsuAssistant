@@ -38,6 +38,15 @@ Aplicacion web para gestion de conocimiento SAP IS-U con IA y seguimiento operat
 - Aprobacion con indexado automatico en Qdrant
 - Rechazo con tracking de estado
 
+### Finance (Personal)
+
+- Gestion de gastos con categorias personalizables y documentos adjuntos
+- Facturacion con lineas de detalle, calculo automatico de IVA y generacion de PDF
+- Resumen financiero mensual/anual con tasa impositiva configurable
+- OCR para extraccion automatica de importes y fechas desde PDFs e imagenes
+- Documentos: subida, descarga, hash SHA256
+- Exportacion CSV de gastos y facturas
+
 ### Settings
 
 - Registro y gestion de clientes
@@ -113,6 +122,7 @@ src/
       ingest.py         # API de ingesta (texto + archivos)
       review.py         # API de revision/aprobacion KB
       kanban.py         # API Kanban (tickets, columnas, CSV import)
+      finance.py        # API Finance (gastos, facturas, resumen, OCR)
       settings.py       # API de configuracion (clientes, Qdrant, API key)
     templates/
       base.html         # Layout: sidebar, header, dark mode, selector cliente
@@ -142,6 +152,13 @@ src/
     storage/
       kanban_repository.py  # Repositorio SQLite (tickets, columnas, historial)
       csv_import.py         # Importacion masiva desde CSV
+  finance/              # Modulo de finanzas personales
+    storage/
+      finance_repository.py # Repositorio SQLite (gastos, facturas, categorias, documentos)
+    pdf/
+      invoice_pdf.py        # Generacion de PDF de facturas
+    ocr/
+      ocr_service.py        # Extraccion OCR de importes y fechas
   shared/               # Utilidades comunes
     app_state.py        # Estado global de la aplicacion
     client_manager.py   # Registro de clientes + aislamiento de carpetas
@@ -162,6 +179,7 @@ data/
   app.sqlite                      # Config global (clientes registrados)
   kanban_global.sqlite            # Columnas Kanban (compartidas)
   chat_history.sqlite             # Historial de chat (sesiones y mensajes)
+  finance.sqlite                  # Finanzas (gastos, facturas, categorias, documentos)
   standard/
     assistant_kb.sqlite           # Knowledge base estandar
     uploads/
@@ -170,6 +188,9 @@ data/
       assistant_kb.sqlite         # KB del cliente
       kanban.sqlite               # Tickets Kanban del cliente
       uploads/
+  finance/
+    uploads/                      # Documentos financieros subidos
+    invoices/                     # PDFs de facturas generadas
 ```
 
 ## API Endpoints
@@ -226,3 +247,37 @@ data/
 | POST   | `/api/settings/apikey`     | Configurar API key      |
 | POST   | `/api/session/client`      | Cambiar cliente activo  |
 | POST   | `/api/session/standard-kb` | Toggle KB estandar      |
+
+### Finance
+
+| Metodo | Ruta                                        | Descripcion                    |
+| ------ | ------------------------------------------- | ------------------------------ |
+| GET    | `/finance/summary`                          | Pagina de resumen              |
+| GET    | `/finance/expenses`                         | Pagina de gastos               |
+| GET    | `/finance/invoices`                         | Pagina de facturas             |
+| GET    | `/finance/invoices/new`                     | Crear factura                  |
+| GET    | `/finance/invoices/{id}/edit`               | Editar factura                 |
+| GET    | `/finance/settings`                         | Config. financiera             |
+| GET    | `/api/finance/settings`                     | Obtener config                 |
+| PUT    | `/api/finance/settings`                     | Actualizar config              |
+| GET    | `/api/finance/categories`                   | Listar categorias              |
+| POST   | `/api/finance/categories`                   | Crear categoria                |
+| PUT    | `/api/finance/categories/{id}`              | Renombrar categoria            |
+| DELETE | `/api/finance/categories/{id}`              | Eliminar categoria             |
+| POST   | `/api/finance/upload`                       | Subir documento                |
+| GET    | `/api/finance/documents/{id}/download`      | Descargar documento            |
+| DELETE | `/api/finance/documents/{id}`               | Eliminar documento             |
+| GET    | `/api/finance/expenses`                     | Listar gastos                  |
+| POST   | `/api/finance/expenses`                     | Crear gasto                    |
+| PUT    | `/api/finance/expenses/{id}`                | Editar gasto                   |
+| DELETE | `/api/finance/expenses/{id}`                | Eliminar gasto                 |
+| GET    | `/api/finance/expenses/export-csv`          | Exportar gastos CSV            |
+| GET    | `/api/finance/invoices`                     | Listar facturas                |
+| POST   | `/api/finance/invoices`                     | Crear factura                  |
+| GET    | `/api/finance/invoices/{id}`                | Detalle factura                |
+| PUT    | `/api/finance/invoices/{id}`                | Editar factura                 |
+| DELETE | `/api/finance/invoices/{id}`                | Eliminar factura               |
+| POST   | `/api/finance/invoices/{id}/generate-pdf`   | Generar PDF                    |
+| GET    | `/api/finance/invoices/export-csv`          | Exportar facturas CSV          |
+| GET    | `/api/finance/summary`                      | Resumen mensual/anual          |
+| POST   | `/api/finance/ocr/{doc_id}`                 | Ejecutar OCR                   |
