@@ -1222,7 +1222,8 @@ class TestFinanceEdgeCases:
         s = repo.get_monthly_summary(2025, 1)
         assert s["profit"] == -500.0
         assert s["tax"] == 0.0
-        assert s["net"] == -500.0
+        assert s["net"] == 0.0  # net = incomes - tax; expenses are personal, not deducted from net
+        assert s["net_business"] == -500.0  # net_business = 0 - 500 - 0 = -500
 
     def test_ocr_extract_multiple_dates(self):
         from src.finance.ocr.ocr_service import _extract_dates

@@ -1026,6 +1026,7 @@ class TestSummary:
         assert s["profit"] == 0.0
         assert s["tax"] == 0.0
         assert s["net"] == 0.0
+        assert s["net_business"] == 0.0
         assert s["tax_rate"] == 0.15
 
     def test_monthly_summary_with_data(self, tmp_path):
@@ -1043,8 +1044,9 @@ class TestSummary:
         assert s["incomes"] == 1000.0
         assert s["expenses"] == 300.0
         assert s["profit"] == 700.0
-        assert s["tax"] == _round2(700.0 * 0.15)  # 105.0
-        assert s["net"] == _round2(700.0 - 105.0)  # 595.0
+        assert s["tax"] == _round2(1000.0 * 0.15)  # 150.0
+        assert s["net"] == _round2(1000.0 - 150.0)  # 850.0 (net = incomes - tax)
+        assert s["net_business"] == _round2(1000.0 - 300.0 - 150.0)  # 550.0 (net_business = incomes - expenses - tax)
 
     def test_monthly_summary_custom_tax_rate(self, tmp_path):
         repo = FinanceRepository(tmp_path / "fin.db")
@@ -1058,8 +1060,9 @@ class TestSummary:
         s = repo.get_monthly_summary(2025, 1, tax_rate=0.25)
         assert s["profit"] == 800.0
         assert s["tax_rate"] == 0.25
-        assert s["tax"] == _round2(800.0 * 0.25)  # 200.0
-        assert s["net"] == _round2(800.0 - 200.0)  # 600.0
+        assert s["tax"] == _round2(1000.0 * 0.25)  # 250.0
+        assert s["net"] == _round2(1000.0 - 250.0)  # 750.0 (net = incomes - tax)
+        assert s["net_business"] == _round2(1000.0 - 200.0 - 250.0)  # 550.0 (net_business = incomes - expenses - tax)
 
     def test_monthly_summary_negative_profit_no_tax(self, tmp_path):
         repo = FinanceRepository(tmp_path / "fin.db")
@@ -1069,7 +1072,8 @@ class TestSummary:
         s = repo.get_monthly_summary(2025, 1)
         assert s["profit"] == -500.0
         assert s["tax"] == 0.0  # no tax on negative profit
-        assert s["net"] == -500.0
+        assert s["net"] == 0.0  # net = incomes - tax; no income means net = 0
+        assert s["net_business"] == -500.0  # net_business = 0 - 500 - 0 = -500
 
     def test_yearly_summary_returns_12_months(self, tmp_path):
         repo = FinanceRepository(tmp_path / "fin.db")

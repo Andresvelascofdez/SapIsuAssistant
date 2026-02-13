@@ -18,17 +18,56 @@
     <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100" x-text="invoiceId ? 'Edit Invoice' : 'New Invoice'"></h2>
   </div>
 
+  <!-- Import from Document -->
+  <div x-show="!invoiceId" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <h3 class="text-md font-semibold text-gray-800 dark:text-gray-100 mb-2">Import from Document</h3>
+    <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">Upload a PDF or image to auto-detect the invoice amount, or enter it manually below.</p>
+    <div class="flex items-center gap-3">
+      <input type="file" @change="importFile($event)" accept=".pdf,.jpg,.jpeg,.png" class="text-sm text-gray-600 dark:text-gray-300">
+      <span x-show="importing" class="text-xs text-amber-600 dark:text-amber-400">Processing...</span>
+    </div>
+    <!-- Import Results -->
+    <div x-show="importedDocId" class="mt-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg space-y-3">
+      <div x-show="ocrError" class="text-sm text-amber-600 dark:text-amber-400 mb-2" x-text="ocrError"></div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Amount (EUR)</label>
+          <input x-model.number="importAmount" type="number" step="0.01" min="0"
+                 class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+          <span x-show="ocrDetectedAmount" class="text-xs text-green-600 dark:text-green-400">Auto-detected</span>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Year</label>
+          <input x-model.number="importYear" type="number" min="2000" max="2100"
+                 class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Month</label>
+          <select x-model.number="importMonth" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+            <template x-for="m in 12" :key="m">
+              <option :value="m" x-text="monthNames[m-1]"></option>
+            </template>
+          </select>
+        </div>
+      </div>
+      <div x-show="ocrRawText" class="text-xs text-gray-400 dark:text-gray-500">
+        <details>
+          <summary class="cursor-pointer hover:text-gray-600 dark:hover:text-gray-300">Show extracted text</summary>
+          <pre class="mt-1 whitespace-pre-wrap max-h-32 overflow-y-auto bg-white dark:bg-gray-800 p-2 rounded text-gray-600 dark:text-gray-300" x-text="ocrRawText"></pre>
+        </details>
+      </div>
+      <button @click="applyImport()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">Apply to Form</button>
+    </div>
+  </div>
+
   <!-- Invoice Form -->
   <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <!-- Period -->
       <div>
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Year</label>
-        <select x-model.number="form.period_year" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
-          <template x-for="y in yearOptions" :key="y">
-            <option :value="y" x-text="y"></option>
-          </template>
-        </select>
+        <input type="number" x-model.number="form.period_year" min="2000" max="2100"
+               class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Month</label>
@@ -167,17 +206,22 @@
 function invoiceEditApp() {
   const now = new Date();
   const currentYear = now.getFullYear();
-  const yearOptions = [];
-  for (let y = currentYear - 5; y <= currentYear + 1; y++) yearOptions.push(y);
 
   return {
     invoiceId: {{ invoice_id|tojson if invoice_id else 'null' }},
-    yearOptions,
     monthNames: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
     vatPercent: 0,
     uploading: false,
     generatingPdf: false,
     formError: '',
+    importing: false,
+    importedDocId: null,
+    importAmount: 0,
+    importYear: currentYear,
+    importMonth: now.getMonth() + 1,
+    ocrDetectedAmount: false,
+    ocrRawText: '',
+    ocrError: '',
     form: {
       period_year: currentYear,
       period_month: now.getMonth() + 1,
@@ -298,6 +342,59 @@ function invoiceEditApp() {
         await this.loadData();
       }
       this.generatingPdf = false;
+    },
+
+    async importFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      this.importing = true;
+      this.ocrError = '';
+      this.ocrDetectedAmount = false;
+      this.ocrRawText = '';
+      this.importAmount = 0;
+      this.importYear = currentYear;
+      this.importMonth = now.getMonth() + 1;
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        const uploadResp = await fetch('/api/finance/upload', {method: 'POST', body: fd});
+        const doc = await uploadResp.json();
+        this.importedDocId = doc.id;
+        this.form.document_id = doc.id;
+        const ocrResp = await fetch('/api/finance/ocr/' + doc.id, {method: 'POST'});
+        if (ocrResp.ok) {
+          const ocrData = await ocrResp.json();
+          if (ocrData.suggested_amount) {
+            this.importAmount = ocrData.suggested_amount;
+            this.ocrDetectedAmount = true;
+          }
+          if (ocrData.suggested_year) this.importYear = ocrData.suggested_year;
+          if (ocrData.suggested_month) this.importMonth = ocrData.suggested_month;
+          this.ocrRawText = ocrData.raw_text || '';
+          if (!ocrData.suggested_amount) {
+            this.ocrError = 'Could not detect amount automatically. Please enter it manually.';
+          }
+        } else {
+          this.ocrError = 'OCR processing not available. Please enter the amount manually.';
+        }
+      } catch (e) {
+        this.ocrError = 'Error processing file. Please enter data manually.';
+      }
+      this.importing = false;
+    },
+
+    applyImport() {
+      if (this.importAmount > 0) {
+        this.items = [{
+          description: 'Imported invoice',
+          quantity: 1,
+          unit: 'HOURS',
+          unit_price: this.importAmount,
+          line_total: this.importAmount,
+        }];
+      }
+      if (this.importYear) this.form.period_year = this.importYear;
+      if (this.importMonth) this.form.period_month = this.importMonth;
     },
   }
 }

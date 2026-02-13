@@ -550,8 +550,9 @@ async def get_summary(
         total_expenses = sum(m["expenses"] for m in months)
         total_profit = round(total_incomes - total_expenses, 2)
         effective_rate = months[0]["tax_rate"] if months else 0.15
-        total_tax = round(total_profit * effective_rate, 2) if total_profit > 0 else 0.0
-        total_net = round(total_profit - total_tax, 2)
+        total_tax = round(total_incomes * effective_rate, 2) if total_incomes > 0 else 0.0
+        total_net = round(total_incomes - total_tax, 2)
+        total_net_business = round(total_incomes - total_expenses - total_tax, 2)
         return {
             "months": months,
             "totals": {
@@ -561,8 +562,191 @@ async def get_summary(
                 "tax_rate": effective_rate,
                 "tax": total_tax,
                 "net": total_net,
+                "net_business": total_net_business,
             },
         }
+
+
+# ── Bulk Actions ──
+
+@router.post("/api/finance/invoices/bulk-mark-paid")
+async def bulk_mark_paid(request: Request):
+    """Mark multiple invoices as PAID."""
+    body = await request.json()
+    ids = body.get("ids", [])
+    if not ids:
+        return JSONResponse({"error": "No invoice IDs provided."}, status_code=400)
+    repo = get_finance_repository()
+    updated = 0
+    for inv_id in ids:
+        result = repo.update_invoice(inv_id, status="PAID")
+        if result:
+            updated += 1
+    return {"updated": updated}
+
+
+# ── Bulk Import ──
+
+@router.post("/api/finance/invoices/bulk-import")
+async def bulk_import_invoices(files: list[UploadFile] = File(...)):
+    """Upload multiple invoice files, run OCR on each, and create one invoice per file."""
+    from src.finance.ocr.ocr_service import extract_from_image, extract_from_pdf
+
+    repo = get_finance_repository()
+    results = []
+    now_dt = datetime.now()
+
+    for file in files:
+        # 1. Save the file
+        content = await file.read()
+        folder = UPLOAD_ROOT / str(now_dt.year) / f"{now_dt.month:02d}"
+        folder.mkdir(parents=True, exist_ok=True)
+        safe_name = Path(file.filename).name if file.filename else "upload"
+        dest = folder / f"{now_dt.strftime('%Y%m%d_%H%M%S')}_{safe_name}"
+        dest.write_bytes(content)
+
+        doc = repo.create_document(
+            original_file_name=safe_name,
+            mime_type=file.content_type or "application/octet-stream",
+            size_bytes=len(content),
+            storage_path=str(dest.relative_to(DATA_ROOT)),
+            file_bytes=content,
+        )
+
+        # 2. Run OCR
+        ocr_amount = None
+        ocr_year = now_dt.year
+        ocr_month = now_dt.month
+        mime = (file.content_type or "").lower()
+        file_path = DATA_ROOT / doc.storage_path
+        try:
+            if mime == "application/pdf":
+                ocr_result = extract_from_pdf(file_path)
+            elif mime.startswith("image/"):
+                ocr_result = extract_from_image(file_path)
+            else:
+                ocr_result = {}
+
+            ocr_amount = ocr_result.get("suggested_amount")
+            if ocr_result.get("suggested_year"):
+                ocr_year = ocr_result["suggested_year"]
+            if ocr_result.get("suggested_month"):
+                ocr_month = ocr_result["suggested_month"]
+
+            detected_date_iso = None
+            if ocr_result.get("suggested_year") and ocr_result.get("suggested_month"):
+                detected_date_iso = f"{ocr_result['suggested_year']}-{ocr_result['suggested_month']:02d}"
+            repo.update_document_ocr(
+                doc.id,
+                raw_text=ocr_result.get("raw_text"),
+                detected_amount=ocr_amount,
+                detected_date_iso=detected_date_iso,
+            )
+        except Exception:
+            pass  # OCR failure is non-blocking
+
+        # 3. Create invoice with detected data
+        items = []
+        if ocr_amount and ocr_amount > 0:
+            items = [{"description": "Imported from " + safe_name, "quantity": 1, "unit": "HOURS", "unit_price": ocr_amount}]
+
+        invoice = repo.create_invoice(
+            period_year=ocr_year,
+            period_month=ocr_month,
+            client_name="(imported)",
+            invoice_number=f"IMP-{safe_name}",
+            document_id=doc.id,
+            items=items,
+        )
+
+        results.append({
+            "invoice_id": invoice.id,
+            "file_name": safe_name,
+            "detected_amount": ocr_amount,
+            "period": f"{ocr_year}-{ocr_month:02d}",
+            "total": invoice.total,
+        })
+
+    return {"imported": len(results), "invoices": results}
+
+
+@router.post("/api/finance/expenses/bulk-import")
+async def bulk_import_expenses(files: list[UploadFile] = File(...)):
+    """Upload multiple expense ticket files, run OCR on each, and create one expense per file."""
+    from src.finance.ocr.ocr_service import extract_from_image, extract_from_pdf
+
+    repo = get_finance_repository()
+    categories = repo.list_categories(active_only=True)
+    default_cat_id = categories[0].id if categories else None
+    results = []
+    now_dt = datetime.now()
+
+    for file in files:
+        content = await file.read()
+        folder = UPLOAD_ROOT / str(now_dt.year) / f"{now_dt.month:02d}"
+        folder.mkdir(parents=True, exist_ok=True)
+        safe_name = Path(file.filename).name if file.filename else "upload"
+        dest = folder / f"{now_dt.strftime('%Y%m%d_%H%M%S')}_{safe_name}"
+        dest.write_bytes(content)
+
+        doc = repo.create_document(
+            original_file_name=safe_name,
+            mime_type=file.content_type or "application/octet-stream",
+            size_bytes=len(content),
+            storage_path=str(dest.relative_to(DATA_ROOT)),
+            file_bytes=content,
+        )
+
+        ocr_amount = 0
+        ocr_year = now_dt.year
+        ocr_month = now_dt.month
+        mime = (file.content_type or "").lower()
+        file_path = DATA_ROOT / doc.storage_path
+        try:
+            if mime == "application/pdf":
+                ocr_result = extract_from_pdf(file_path)
+            elif mime.startswith("image/"):
+                ocr_result = extract_from_image(file_path)
+            else:
+                ocr_result = {}
+
+            if ocr_result.get("suggested_amount"):
+                ocr_amount = ocr_result["suggested_amount"]
+            if ocr_result.get("suggested_year"):
+                ocr_year = ocr_result["suggested_year"]
+            if ocr_result.get("suggested_month"):
+                ocr_month = ocr_result["suggested_month"]
+
+            detected_date_iso = None
+            if ocr_result.get("suggested_year") and ocr_result.get("suggested_month"):
+                detected_date_iso = f"{ocr_result['suggested_year']}-{ocr_result['suggested_month']:02d}"
+            repo.update_document_ocr(
+                doc.id,
+                raw_text=ocr_result.get("raw_text"),
+                detected_amount=ocr_result.get("suggested_amount"),
+                detected_date_iso=detected_date_iso,
+            )
+        except Exception:
+            pass
+
+        expense = repo.create_expense(
+            period_year=ocr_year,
+            period_month=ocr_month,
+            category_id=default_cat_id,
+            amount=ocr_amount,
+            merchant=safe_name,
+            document_id=doc.id,
+        )
+
+        results.append({
+            "expense_id": expense.id,
+            "file_name": safe_name,
+            "detected_amount": ocr_amount,
+            "period": f"{ocr_year}-{ocr_month:02d}",
+            "amount": expense.amount,
+        })
+
+    return {"imported": len(results), "expenses": results}
 
 
 # ── OCR API ──

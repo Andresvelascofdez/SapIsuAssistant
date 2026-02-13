@@ -16,22 +16,23 @@
   <!-- Header + Filters -->
   <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
     <div class="flex flex-wrap items-center gap-4">
-      <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Invoices</h2>
+      <h2 class="text-lg font-semibold text-gray-800 dark:text-white">Invoices</h2>
       <div class="flex items-center gap-2 ml-auto flex-wrap">
-        <select x-model.number="filterYear" @change="loadData()" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm">
-          <option :value="0">All years</option>
-          <template x-for="y in yearOptions" :key="y">
-            <option :value="y" x-text="y"></option>
-          </template>
-        </select>
-        <select x-model.number="filterMonth" @change="loadData()" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm">
+        <div class="flex items-center gap-1">
+          <input type="number" :value="filterYear || ''" @input="filterYear = parseInt($event.target.value) || 0" @change="loadData()" placeholder="All years" min="2000" max="2100"
+                 class="w-24 border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg px-3 py-1.5 text-sm">
+          <button x-show="filterYear" @click="filterYear = 0; loadData()" class="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300" title="Show all years">All</button>
+        </div>
+        <select x-model.number="filterMonth" @change="loadData()" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg px-3 py-1.5 text-sm">
           <option :value="0">All months</option>
           <template x-for="m in 12" :key="m">
             <option :value="m" x-text="monthNames[m-1]"></option>
           </template>
         </select>
-        <input x-model="filterClient" @input.debounce.300ms="loadData()" placeholder="Client..." class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm w-36">
+        <input x-model="filterClient" @input.debounce.300ms="loadData()" placeholder="Client..." class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg px-3 py-1.5 text-sm w-36">
         <a :href="csvExportUrl()" class="text-sm text-sap-600 dark:text-sap-400 hover:underline">Export CSV</a>
+        <button x-show="invoices.some(i => i.status !== 'PAID')" @click="markAllPaid()" class="border border-green-600 text-green-600 dark:text-green-400 dark:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 px-4 py-2 rounded-lg text-sm font-medium transition">Mark All Paid</button>
+        <button @click="showBulk = !showBulk" class="border border-sap-600 text-sap-600 dark:text-sap-400 dark:border-sap-400 hover:bg-sap-50 dark:hover:bg-sap-900/20 px-4 py-2 rounded-lg text-sm font-medium transition" x-text="showBulk ? 'Cancel Bulk' : 'Bulk Import'"></button>
         <a href="/finance/invoices/new" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">New Invoice</a>
       </div>
     </div>
@@ -39,33 +40,58 @@
 
   <!-- Invoices Table -->
   <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+
+    <!-- Bulk Import -->
+    <div x-show="showBulk" class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50" x-transition>
+      <h3 class="text-sm font-semibold text-gray-800 dark:text-white mb-2">Bulk Import Invoices</h3>
+      <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Select multiple PDF/image files. Each file will create an invoice with the amount auto-detected via OCR. You can edit each invoice afterwards.</p>
+      <div class="flex items-center gap-3">
+        <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png" @change="bulkFiles = $event.target.files" class="text-sm text-gray-600 dark:text-gray-300">
+        <button x-show="bulkFiles && bulkFiles.length > 0 && !bulkUploading" @click="bulkImport()"
+                class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+                x-text="'Upload ' + (bulkFiles ? bulkFiles.length : 0) + ' file(s)'"></button>
+        <span x-show="bulkUploading" class="text-xs text-amber-600 dark:text-amber-400" x-text="'Processing ' + bulkProgress + '...'"></span>
+      </div>
+      <div x-show="bulkResults.length > 0" class="mt-3 space-y-1">
+        <template x-for="r in bulkResults" :key="r.invoice_id">
+          <div class="flex items-center gap-2 text-xs">
+            <span class="text-green-600 dark:text-green-400">OK</span>
+            <span class="text-gray-600 dark:text-gray-300" x-text="r.file_name"></span>
+            <span class="font-mono text-gray-800 dark:text-white" x-text="r.total.toFixed(2) + ' EUR'"></span>
+            <span class="text-gray-400 dark:text-gray-500" x-text="r.period"></span>
+            <a :href="'/finance/invoices/' + r.invoice_id + '/edit'" class="text-sap-600 dark:text-sap-400 hover:underline">Edit</a>
+          </div>
+        </template>
+      </div>
+    </div>
+
     <table class="w-full text-sm">
       <thead class="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
         <tr>
           <th class="px-4 py-3 text-left font-medium">Period</th>
           <th class="px-4 py-3 text-left font-medium">Client</th>
           <th class="px-4 py-3 text-left font-medium">Invoice No</th>
-          <th class="px-4 py-3 text-right font-medium">Total (EUR)</th>
-          <th class="px-4 py-3 text-center font-medium">VAT%</th>
-          <th class="px-4 py-3 text-center font-medium">Status</th>
-          <th class="px-4 py-3 text-center font-medium">Doc</th>
-          <th class="px-4 py-3 text-center font-medium">Actions</th>
+          <th class="px-4 py-3 text-left font-medium">Total (EUR)</th>
+          <th class="px-4 py-3 text-left font-medium">VAT%</th>
+          <th class="px-4 py-3 text-left font-medium">Status</th>
+          <th class="px-4 py-3 text-left font-medium">Doc</th>
+          <th class="px-4 py-3 text-left font-medium">Actions</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
         <template x-for="inv in invoices" :key="inv.id">
           <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
-            <td class="px-4 py-3 text-gray-800 dark:text-gray-100" x-text="inv.period_year + '-' + String(inv.period_month).padStart(2, '0')"></td>
+            <td class="px-4 py-3 text-gray-800 dark:text-white" x-text="inv.period_year + '-' + String(inv.period_month).padStart(2, '0')"></td>
             <td class="px-4 py-3 text-gray-600 dark:text-gray-300" x-text="inv.client_name"></td>
-            <td class="px-4 py-3 font-mono text-gray-800 dark:text-gray-100" x-text="inv.invoice_number"></td>
-            <td class="px-4 py-3 text-right font-mono text-gray-800 dark:text-gray-100" x-text="inv.total.toFixed(2)"></td>
-            <td class="px-4 py-3 text-center text-gray-600 dark:text-gray-300" x-text="(inv.vat_rate * 100).toFixed(0) + '%'"></td>
-            <td class="px-4 py-3 text-center">
+            <td class="px-4 py-3 font-mono text-gray-800 dark:text-white" x-text="inv.invoice_number"></td>
+            <td class="px-4 py-3 text-left font-mono text-gray-800 dark:text-white" x-text="inv.total.toFixed(2)"></td>
+            <td class="px-4 py-3 text-left text-gray-600 dark:text-gray-300" x-text="(inv.vat_rate * 100).toFixed(0) + '%'"></td>
+            <td class="px-4 py-3 text-left">
               <span class="text-xs px-2 py-0.5 rounded font-semibold"
                     :class="inv.status === 'PAID' ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300' : 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300'"
                     x-text="inv.status"></span>
             </td>
-            <td class="px-4 py-3 text-center">
+            <td class="px-4 py-3 text-left">
               <template x-if="inv.document_id">
                 <a :href="'/api/finance/documents/' + inv.document_id + '/download'" target="_blank" class="text-sap-600 dark:text-sap-400 hover:underline text-xs">View</a>
               </template>
@@ -73,7 +99,7 @@
                 <span class="text-xs text-gray-400 dark:text-gray-500">--</span>
               </template>
             </td>
-            <td class="px-4 py-3 text-center">
+            <td class="px-4 py-3 text-left">
               <a :href="'/finance/invoices/' + inv.id + '/edit'" class="text-sm text-sap-600 dark:text-sap-400 hover:underline mr-2">Edit</a>
               <button @click="deleteInvoice(inv.id)" class="text-sm text-red-600 dark:text-red-400 hover:underline">Delete</button>
             </td>
@@ -85,10 +111,10 @@
       </tbody>
       <tfoot class="bg-gray-50 dark:bg-gray-700 font-semibold">
         <tr>
-          <td colspan="3" class="px-4 py-3 text-gray-700 dark:text-gray-200">Total</td>
-          <td class="px-4 py-3 text-right font-mono text-gray-800 dark:text-gray-100" x-text="total.toFixed(2)"></td>
-          <td colspan="2" class="px-4 py-3 text-center text-xs text-gray-400 dark:text-gray-500" x-text="invoiceCount + ' invoice(s)'"></td>
-          <td colspan="2" class="px-4 py-3 text-center text-xs text-amber-600 dark:text-amber-400" x-text="'Pending: ' + pending.toFixed(2)"></td>
+          <td colspan="3" class="px-4 py-3 text-gray-700 dark:text-white">Total</td>
+          <td class="px-4 py-3 text-left font-mono text-gray-800 dark:text-white" x-text="total.toFixed(2)"></td>
+          <td colspan="2" class="px-4 py-3 text-left text-xs text-gray-400 dark:text-gray-500" x-text="invoiceCount + ' invoice(s)'"></td>
+          <td colspan="2" class="px-4 py-3 text-left text-xs text-amber-600 dark:text-amber-400" x-text="'Pending: ' + pending.toFixed(2)"></td>
         </tr>
       </tfoot>
     </table>
@@ -100,8 +126,6 @@
 function invoicesApp() {
   const now = new Date();
   const currentYear = now.getFullYear();
-  const yearOptions = [];
-  for (let y = currentYear - 5; y <= currentYear + 1; y++) yearOptions.push(y);
 
   return {
     invoices: [],
@@ -111,8 +135,12 @@ function invoicesApp() {
     filterYear: currentYear,
     filterMonth: 0,
     filterClient: '',
-    yearOptions,
     monthNames: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+    showBulk: false,
+    bulkUploading: false,
+    bulkProgress: '',
+    bulkResults: [],
+    bulkFiles: null,
 
     async loadData() {
       let url = '/api/finance/invoices?';
@@ -136,6 +164,39 @@ function invoicesApp() {
 
     async deleteInvoice(id) {
       await fetch('/api/finance/invoices/' + id, {method: 'DELETE'});
+      await this.loadData();
+    },
+
+    async markAllPaid() {
+      const ids = this.invoices.filter(i => i.status !== 'PAID').map(i => i.id);
+      if (ids.length === 0) return;
+      await fetch('/api/finance/invoices/bulk-mark-paid', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ids}),
+      });
+      await this.loadData();
+    },
+
+    async bulkImport() {
+      const files = this.bulkFiles;
+      if (!files || files.length === 0) return;
+      this.bulkUploading = true;
+      this.bulkResults = [];
+      this.bulkProgress = files.length + ' files';
+      const fd = new FormData();
+      for (let i = 0; i < files.length; i++) {
+        fd.append('files', files[i]);
+      }
+      try {
+        const resp = await fetch('/api/finance/invoices/bulk-import', {method: 'POST', body: fd});
+        if (resp.ok) {
+          const data = await resp.json();
+          this.bulkResults = data.invoices;
+        }
+      } catch (e) {}
+      this.bulkUploading = false;
+      this.bulkFiles = null;
       await this.loadData();
     },
   }

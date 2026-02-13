@@ -42,10 +42,16 @@ Aplicacion web para gestion de conocimiento SAP IS-U con IA y seguimiento operat
 
 - Gestion de gastos con categorias personalizables y documentos adjuntos
 - Facturacion con lineas de detalle, calculo automatico de IVA y generacion de PDF
-- Resumen financiero mensual/anual con tasa impositiva configurable
+- Resumen financiero mensual/anual con doble vista:
+  - **Net - Personal**: ingresos - impuestos (gastos personales no deducidos)
+  - **Net - Business**: ingresos - gastos - impuestos (vision empresarial)
 - OCR para extraccion automatica de importes y fechas desde PDFs e imagenes
+- **Bulk import**: Subida multiple de PDFs/imagenes para crear gastos o facturas automaticamente via OCR
+- **Mark All Paid**: Marcar todas las facturas pendientes como pagadas de una vez
 - Documentos: subida, descarga, hash SHA256
 - Exportacion CSV de gastos y facturas
+- Navegacion por pestanas: Summary, Expenses, Invoices, Settings
+- Dark mode completo con colores legibles
 
 ### Settings
 
@@ -125,12 +131,17 @@ src/
       finance.py        # API Finance (gastos, facturas, resumen, OCR)
       settings.py       # API de configuracion (clientes, Qdrant, API key)
     templates/
-      base.html         # Layout: sidebar, header, dark mode, selector cliente
+      base.html         # Layout: sidebar, header, dark mode, selector cliente, CSS suplementario
       chat.html         # Chat con panel de fuentes
       ingest.html       # Formulario de ingesta (texto/archivo)
       review.html       # Lista + detalle de items KB
       kanban.html       # Board drag-and-drop con colores
       settings.html     # Gestion de clientes y configuracion
+      finance_summary.html     # Resumen financiero mensual/anual
+      finance_expenses.html    # Gastos con bulk import
+      finance_invoices.html    # Facturas con bulk import y mark all paid
+      finance_invoice_edit.html # Editor de factura con OCR import
+      finance_settings.html    # Config financiera y categorias
     static/
       style.css         # Estilos adicionales
   assistant/            # Modulo de conocimiento IA
@@ -262,7 +273,9 @@ data/
 | PUT    | `/api/finance/settings`                     | Actualizar config              |
 | GET    | `/api/finance/categories`                   | Listar categorias              |
 | POST   | `/api/finance/categories`                   | Crear categoria                |
+| PUT    | `/api/finance/categories/reorder`           | Reordenar categorias           |
 | PUT    | `/api/finance/categories/{id}`              | Renombrar categoria            |
+| PUT    | `/api/finance/categories/{id}/toggle`       | Activar/desactivar categoria   |
 | DELETE | `/api/finance/categories/{id}`              | Eliminar categoria             |
 | POST   | `/api/finance/upload`                       | Subir documento                |
 | GET    | `/api/finance/documents/{id}/download`      | Descargar documento            |
@@ -272,6 +285,7 @@ data/
 | PUT    | `/api/finance/expenses/{id}`                | Editar gasto                   |
 | DELETE | `/api/finance/expenses/{id}`                | Eliminar gasto                 |
 | GET    | `/api/finance/expenses/export-csv`          | Exportar gastos CSV            |
+| POST   | `/api/finance/expenses/bulk-import`         | Bulk import gastos (OCR)       |
 | GET    | `/api/finance/invoices`                     | Listar facturas                |
 | POST   | `/api/finance/invoices`                     | Crear factura                  |
 | GET    | `/api/finance/invoices/{id}`                | Detalle factura                |
@@ -279,5 +293,7 @@ data/
 | DELETE | `/api/finance/invoices/{id}`                | Eliminar factura               |
 | POST   | `/api/finance/invoices/{id}/generate-pdf`   | Generar PDF                    |
 | GET    | `/api/finance/invoices/export-csv`          | Exportar facturas CSV          |
+| POST   | `/api/finance/invoices/bulk-import`         | Bulk import facturas (OCR)     |
+| POST   | `/api/finance/invoices/bulk-mark-paid`      | Marcar todas como pagadas      |
 | GET    | `/api/finance/summary`                      | Resumen mensual/anual          |
 | POST   | `/api/finance/ocr/{doc_id}`                 | Ejecutar OCR                   |
