@@ -27,6 +27,14 @@
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200'">
       <span x-text="hideClosed ? 'Cerrados ocultos (' + tickets.filter(t => t.status === 'CERRADO').length + ')' : 'Ocultar cerrados'"></span>
     </button>
+    <button @click="bulkCloseTickets()"
+            class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition">
+      Cerrar todos
+    </button>
+    <button @click="deleteClosedTickets()"
+            class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+      Borrar cerrados
+    </button>
     <a href="/api/kanban/export-csv"
        class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition">
       Exportar CSV
@@ -57,7 +65,7 @@
   <!-- Stale tickets banner -->
   <div x-show="staleCount > 0" class="mb-3 rounded-lg bg-amber-100 dark:bg-amber-900/50 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 text-sm overflow-hidden">
     <button @click="staleExpanded = !staleExpanded" class="w-full px-4 py-2 flex items-center justify-between hover:bg-amber-200/50 dark:hover:bg-amber-800/30 transition">
-      <span class="font-semibold" x-text="staleCount + ' ticket(s) estancados (mas de ' + staleDays + ' dias sin movimiento)'"></span>
+      <span class="font-semibold" x-text="staleCount + ' ticket(s) estancados (mas de ' + staleDays + ' dias laborables sin movimiento)'"></span>
       <svg class="w-4 h-4 transition-transform" :class="staleExpanded ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
     </button>
     <div x-show="staleExpanded" x-transition class="border-t border-amber-300 dark:border-amber-700">
@@ -91,10 +99,10 @@
                     @dblclick="startEditCol(col)"></h3>
                 <div class="flex items-center gap-2 mt-0.5">
                   <span class="text-xs opacity-70" :class="colStyle(col.name).title" x-text="ticketsByCol(col.name).length + ' tickets'"></span>
-                  <template x-if="priorityBreakdown(col.name).critical > 0">
+                  <template x-if="priorityBreakdown(col.name).critical > 0 && ['NO_ANALIZADO', 'EN_PROGRESO'].includes(col.name)">
                     <span class="text-xs bg-red-200 text-red-800 dark:bg-red-900 dark:text-red-200 px-1.5 rounded-full" x-text="priorityBreakdown(col.name).critical + ' CRIT'"></span>
                   </template>
-                  <template x-if="priorityBreakdown(col.name).high > 0">
+                  <template x-if="priorityBreakdown(col.name).high > 0 && ['NO_ANALIZADO', 'EN_PROGRESO'].includes(col.name)">
                     <span class="text-xs bg-orange-200 text-orange-800 dark:bg-orange-900 dark:text-orange-200 px-1.5 rounded-full" x-text="priorityBreakdown(col.name).high + ' HIGH'"></span>
                   </template>
                 </div>
@@ -520,6 +528,50 @@ function kanbanApp() {
         return;
       }
       this.selectedTicket = null;
+      await this.loadData();
+    },
+
+    async bulkCloseTickets() {
+      const activeClient = '{{ active_client or "" }}';
+      const scopeText = activeClient ? 'del cliente ' + activeClient : 'de todos los clientes';
+      const openCount = this.tickets.filter(t => t.status !== 'CERRADO').length;
+      if (openCount === 0) {
+        alert('No hay tickets abiertos para cerrar.');
+        return;
+      }
+      if (!confirm('Mover ' + openCount + ' ticket(s) ' + scopeText + ' a CERRADO?')) return;
+      const payload = activeClient ? {client_code: activeClient} : {};
+      const resp = await fetch('/api/kanban/tickets/bulk-close', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        alert('Error al cerrar tickets: ' + (data.error || resp.statusText));
+        return;
+      }
+      alert('Tickets cerrados: ' + data.closed);
+      await this.loadData();
+    },
+
+    async deleteClosedTickets() {
+      const activeClient = '{{ active_client or "" }}';
+      const scopeText = activeClient ? 'del cliente ' + activeClient : 'de todos los clientes';
+      const closedCount = this.tickets.filter(t => t.status === 'CERRADO').length;
+      if (closedCount === 0) {
+        alert('No hay tickets cerrados para borrar.');
+        return;
+      }
+      if (!confirm('Eliminar definitivamente ' + closedCount + ' ticket(s) cerrados ' + scopeText + '?')) return;
+      const qs = activeClient ? '?client_code=' + encodeURIComponent(activeClient) : '';
+      const resp = await fetch('/api/kanban/tickets/closed' + qs, {method: 'DELETE'});
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        alert('Error al borrar cerrados: ' + (data.error || resp.statusText));
+        return;
+      }
+      alert('Tickets borrados: ' + data.deleted);
       await this.loadData();
     },
 

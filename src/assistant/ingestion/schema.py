@@ -33,7 +33,17 @@ SYNTHESIS_SCHEMA = {
                         "type": "array",
                         "items": {"type": "string"}
                     },
-                    "signals": {"type": "object"},
+                    "signals": {
+                        "type": "object",
+                        "properties": {
+                            "module": {"type": ["string", "null"]},
+                            "process": {"type": ["string", "null"]},
+                            "country": {"type": ["string", "null"]},
+                            "sap_area": {"type": ["string", "null"]},
+                        },
+                        "required": ["module", "process", "country", "sap_area"],
+                        "additionalProperties": False,
+                    },
                 },
                 "required": ["type", "title", "content_markdown", "tags", "sap_objects", "signals"],
                 "additionalProperties": False,

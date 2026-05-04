@@ -59,6 +59,7 @@ class Expense:
     category_name: str
     merchant: str | None
     amount: float
+    vat_amount: float | None
     currency: str
     notes: str | None
     document_id: str | None
@@ -169,6 +170,11 @@ class FinanceRepository:
                 CREATE INDEX IF NOT EXISTS idx_expenses_period
                 ON expenses(period_year, period_month)
             """)
+            # Migration: add vat_amount column if not exists
+            try:
+                conn.execute("SELECT vat_amount FROM expenses LIMIT 1")
+            except sqlite3.OperationalError:
+                conn.execute("ALTER TABLE expenses ADD COLUMN vat_amount REAL")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS invoices (
                     id TEXT PRIMARY KEY,
@@ -406,16 +412,17 @@ class FinanceRepository:
         notes: str | None = None,
         document_id: str | None = None,
         document_not_required: bool = False,
+        vat_amount: float | None = None,
     ) -> Expense:
         expense_id = str(uuid.uuid4())
         now = datetime.now(UTC).isoformat()
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 "INSERT INTO expenses (id, period_year, period_month, category_id, merchant, amount, "
-                "currency, notes, document_id, document_not_required, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "vat_amount, currency, notes, document_id, document_not_required, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (expense_id, period_year, period_month, category_id, merchant, amount,
-                 currency, notes, document_id, int(document_not_required), now, now),
+                 vat_amount, currency, notes, document_id, int(document_not_required), now, now),
             )
             conn.commit()
         return self.get_expense(expense_id)
@@ -423,7 +430,7 @@ class FinanceRepository:
     def update_expense(self, expense_id: str, **kwargs) -> Expense | None:
         allowed = {
             "period_year", "period_month", "category_id", "merchant",
-            "amount", "notes", "document_id", "document_not_required",
+            "amount", "vat_amount", "notes", "document_id", "document_not_required",
         }
         updates = []
         params = []
@@ -454,7 +461,7 @@ class FinanceRepository:
             row = conn.execute(
                 "SELECT e.id, e.period_year, e.period_month, e.category_id, "
                 "COALESCE(c.name, '(deleted)') as category_name, "
-                "e.merchant, e.amount, e.currency, e.notes, e.document_id, "
+                "e.merchant, e.amount, e.vat_amount, e.currency, e.notes, e.document_id, "
                 "e.document_not_required, e.created_at, e.updated_at "
                 "FROM expenses e LEFT JOIN expense_categories c ON e.category_id = c.id "
                 "WHERE e.id = ?",
@@ -464,7 +471,7 @@ class FinanceRepository:
                 return None
             return Expense(
                 row[0], row[1], row[2], row[3], row[4], row[5],
-                row[6], row[7], row[8], row[9], bool(row[10]), row[11], row[12],
+                row[6], row[7], row[8], row[9], row[10], bool(row[11]), row[12], row[13],
             )
 
     def list_expenses(
@@ -490,7 +497,7 @@ class FinanceRepository:
         sql = (
             "SELECT e.id, e.period_year, e.period_month, e.category_id, "
             "COALESCE(c.name, '(deleted)') as category_name, "
-            "e.merchant, e.amount, e.currency, e.notes, e.document_id, "
+            "e.merchant, e.amount, e.vat_amount, e.currency, e.notes, e.document_id, "
             "e.document_not_required, e.created_at, e.updated_at "
             "FROM expenses e LEFT JOIN expense_categories c ON e.category_id = c.id"
             f"{where} ORDER BY e.period_year DESC, e.period_month DESC, e.created_at DESC"
@@ -501,7 +508,7 @@ class FinanceRepository:
         with sqlite3.connect(self.db_path) as conn:
             rows = conn.execute(sql, params).fetchall()
             return [
-                Expense(r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], bool(r[10]), r[11], r[12])
+                Expense(r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], r[10], bool(r[11]), r[12], r[13])
                 for r in rows
             ]
 

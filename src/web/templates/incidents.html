@@ -1,0 +1,294 @@
+{% extends "base.html" %}
+{% set active_tab = "incidents" %}
+{% block content %}
+<div x-data="incidentsApp()" x-init="init()" class="max-w-6xl mx-auto space-y-4">
+  <div class="flex flex-wrap items-center gap-3">
+    <div>
+      <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100">Incidencias SAP IS-U</h2>
+      <p class="text-sm text-gray-500 dark:text-gray-400">Registro tecnico con evidencias para revision IP Box.</p>
+    </div>
+    <div class="flex-1"></div>
+    <button @click="startCreateIncident()"
+            class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+      + Incidencia
+    </button>
+  </div>
+
+  <div x-show="message" class="rounded-lg px-4 py-3 text-sm"
+       :class="messageType === 'error' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'"
+       x-text="message"></div>
+
+  <div x-show="!activeClient" class="bg-amber-100 dark:bg-amber-900/50 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 rounded-lg px-4 py-3 text-sm">
+    Selecciona un cliente en la barra superior para ver o crear incidencias.
+  </div>
+
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <input x-model="filters.search" @keydown.enter="loadData()" placeholder="Buscar..."
+             class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+      <select x-model="filters.status" @change="loadData()"
+              class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+        <option value="">Todos los estados</option>
+        <option value="OPEN">Open</option>
+        <option value="IN_PROGRESS">In progress</option>
+        <option value="RESOLVED">Resolved</option>
+        <option value="CLOSED">Closed</option>
+      </select>
+      <select x-model="filters.ipbox_relevance" @change="loadData()"
+              class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+        <option value="">IP Box: todos</option>
+        <option value="UNCLEAR">Unclear</option>
+        <option value="QUALIFYING_CANDIDATE">Qualifying candidate</option>
+        <option value="NOT_QUALIFYING">Not qualifying</option>
+      </select>
+      <input x-model.number="filters.year" @change="loadData()" type="number" min="2000" max="2100"
+             class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+    </div>
+    <div class="flex flex-wrap items-center justify-end gap-2 mt-3">
+      <span class="text-sm text-gray-500 dark:text-gray-400 mr-2" x-text="incidents.length + ' resultado(s)'"></span>
+      <button @click="loadData()"
+              class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+        Buscar
+      </button>
+      <button @click="clearFilters()"
+              class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition">
+        Limpiar
+      </button>
+    </div>
+  </div>
+
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <thead class="bg-gray-50 dark:bg-gray-700/50">
+          <tr>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">ID</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Titulo</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Estado</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Prioridad</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">IP Box</th>
+            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400">Horas</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Evidencias</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+          <template x-for="incident in incidents" :key="incident.id">
+            <tr @click="openIncident(incident)" class="hover:bg-sap-50 dark:hover:bg-sap-900/20 cursor-pointer">
+              <td class="px-4 py-3 text-sm font-mono font-bold text-green-700 dark:text-green-400" x-text="incident.incident_code"></td>
+              <td class="px-4 py-3">
+                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100" x-text="incident.title"></div>
+                <div class="text-xs text-gray-500 dark:text-gray-400" x-text="incident.sap_process || incident.sap_module || 'Sin proceso SAP'"></div>
+              </td>
+              <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300" x-text="incident.status"></td>
+              <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300" x-text="incident.priority"></td>
+              <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300" x-text="incident.ipbox_relevance"></td>
+              <td class="px-4 py-3 text-sm text-right text-gray-700 dark:text-gray-300" x-text="Number(incident.hours_spent || 0).toFixed(2)"></td>
+              <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300" x-text="incident.evidence_count || 0"></td>
+            </tr>
+          </template>
+          <tr x-show="incidents.length === 0">
+            <td colspan="7" class="px-4 py-8 text-center text-sm text-gray-400 dark:text-gray-500">
+              Sin incidencias para los filtros actuales.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div x-show="showCreate" x-transition class="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-[680px] max-w-[95vw] max-h-[90vh] overflow-y-auto p-6" @click.outside="showCreate = false">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Nueva incidencia</h3>
+        <button @click="showCreate = false" class="text-sm text-gray-500 dark:text-gray-400 hover:underline">Cerrar</button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Titulo</label>
+          <input x-model="newIncident.title" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div>
+            <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Estado</label>
+            <select x-model="newIncident.status" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+              <option value="OPEN">Open</option>
+              <option value="IN_PROGRESS">In progress</option>
+              <option value="RESOLVED">Resolved</option>
+              <option value="CLOSED">Closed</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Prioridad</label>
+            <select x-model="newIncident.priority" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+              <option value="LOW">Low</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="HIGH">High</option>
+              <option value="CRITICAL">Critical</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Ano</label>
+            <input x-model.number="newIncident.period_year" type="number" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+          </div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Mes</label>
+            <input x-model.number="newIncident.period_month" type="number" min="1" max="12" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Horas</label>
+            <input x-model.number="newIncident.hours_spent" type="number" min="0" step="0.25" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+          </div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Modulo SAP</label>
+            <input x-model="newIncident.sap_module" placeholder="IS-U / DM / Billing" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+          </div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Proceso SAP</label>
+            <input x-model="newIncident.sap_process" placeholder="Device management" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+          </div>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Relevancia IP Box</label>
+          <select x-model="newIncident.ipbox_relevance" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+            <option value="UNCLEAR">Unclear</option>
+            <option value="QUALIFYING_CANDIDATE">Qualifying candidate</option>
+            <option value="NOT_QUALIFYING">Not qualifying</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Objetos SAP (coma separada)</label>
+          <input x-model="newIncident.sap_objects_text" placeholder="EVER, EANL, EGERH" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Problema</label>
+          <textarea x-model="newIncident.problem_statement" rows="3" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
+        </div>
+      </div>
+      <div class="flex justify-end gap-3 mt-4">
+        <button @click="showCreate = false" class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Cancelar</button>
+        <button @click="createIncident()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Crear</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function incidentsApp() {
+  const now = new Date();
+  return {
+    activeClient: '{{ active_client or "" }}',
+    incidents: [],
+    showCreate: false,
+    message: '',
+    messageType: 'success',
+    filters: {
+      search: '',
+      status: '',
+      ipbox_relevance: '',
+      year: now.getFullYear(),
+    },
+    newIncident: {},
+
+    init() {
+      this.resetNewIncident();
+      if (this.activeClient) this.loadData();
+    },
+
+    resetNewIncident() {
+      this.newIncident = {
+        title: '',
+        status: 'OPEN',
+        priority: 'MEDIUM',
+        period_year: now.getFullYear(),
+        period_month: now.getMonth() + 1,
+        hours_spent: 0,
+        sap_module: '',
+        sap_process: '',
+        sap_objects_text: '',
+        problem_statement: '',
+        ipbox_relevance: 'UNCLEAR',
+      };
+    },
+
+    setMessage(text, type='success') {
+      this.message = text;
+      this.messageType = type;
+      if (text) setTimeout(() => this.message = '', 4000);
+    },
+
+    parseCsv(text) {
+      return (text || '').split(',').map(v => v.trim()).filter(Boolean);
+    },
+
+    async loadData() {
+      if (!this.activeClient) return;
+      const params = new URLSearchParams({client_code: this.activeClient});
+      for (const [key, value] of Object.entries(this.filters)) {
+        if (value !== '' && value !== null && value !== undefined) params.set(key, value);
+      }
+      const resp = await fetch('/api/incidents?' + params.toString());
+      const data = await resp.json();
+      if (!resp.ok) {
+        this.setMessage(data.error || 'No se pudieron cargar las incidencias.', 'error');
+        return;
+      }
+      this.incidents = data.incidents || [];
+    },
+
+    clearFilters() {
+      this.filters.search = '';
+      this.filters.status = '';
+      this.filters.ipbox_relevance = '';
+      this.filters.year = now.getFullYear();
+      this.loadData();
+    },
+
+    startCreateIncident() {
+      if (!this.activeClient) {
+        this.setMessage('Selecciona un cliente en la barra superior o registralo en Settings antes de crear incidencias.', 'error');
+        return;
+      }
+      this.showCreate = true;
+    },
+
+    async createIncident() {
+      if (!this.activeClient) {
+        this.setMessage('Selecciona un cliente antes de crear la incidencia.', 'error');
+        return;
+      }
+      const payload = {
+        client_code: this.activeClient,
+        title: this.newIncident.title,
+        status: this.newIncident.status,
+        priority: this.newIncident.priority,
+        period_year: this.newIncident.period_year,
+        period_month: this.newIncident.period_month,
+        hours_spent: this.newIncident.hours_spent || 0,
+        sap_module: this.newIncident.sap_module,
+        sap_process: this.newIncident.sap_process,
+        sap_objects: this.parseCsv(this.newIncident.sap_objects_text),
+        problem_statement: this.newIncident.problem_statement,
+        ipbox_relevance: this.newIncident.ipbox_relevance,
+      };
+      const resp = await fetch('/api/incidents', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        this.setMessage(data.error || 'No se pudo crear la incidencia.', 'error');
+        return;
+      }
+      window.location.href = '/incidents/' + data.id + '?client_code=' + encodeURIComponent(this.activeClient);
+    },
+
+    openIncident(incident) {
+      window.location.href = '/incidents/' + incident.id + '?client_code=' + encodeURIComponent(incident.client_code || this.activeClient);
+    },
+  }
+}
+</script>
+{% endblock %}

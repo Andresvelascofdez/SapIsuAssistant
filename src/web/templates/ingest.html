@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% set active_tab = "ingest" %}
 {% block content %}
-<div x-data="ingestApp()" class="max-w-4xl mx-auto space-y-6">
+<div x-data="ingestApp()" x-init="loadReviewItems()" class="max-w-6xl mx-auto space-y-6">
 
   <!-- Scope and type selection -->
   <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
@@ -78,6 +78,105 @@
     <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Result</h3>
     <p class="text-sm text-gray-600 dark:text-gray-300" x-text="result"></p>
   </div>
+
+  <!-- Draft review integrated into ingestion -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+      <div class="flex flex-wrap items-center gap-3">
+        <div>
+          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Borradores KB pendientes</h2>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Revisa y aprueba el conocimiento antes de que el Chat lo use.</p>
+        </div>
+        <div class="flex-1"></div>
+        <select x-model="reviewScope" @change="loadReviewItems()" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+          <option value="standard">Standard</option>
+          <option value="client">Client</option>
+        </select>
+        <select x-model="reviewStatusFilter" @change="loadReviewItems()" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+          <option value="DRAFT">Draft</option>
+          <option value="APPROVED">Approved</option>
+          <option value="REJECTED">Rejected</option>
+          <option value="ALL">All</option>
+        </select>
+        <button @click="loadReviewItems()" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition">
+          Refresh
+        </button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 min-h-[420px]">
+      <div class="border-r border-gray-200 dark:border-gray-700 overflow-y-auto max-h-[520px]">
+        <template x-for="item in reviewItems" :key="item.kb_id">
+          <button @click="selectReviewItem(item)"
+                  :class="selectedReviewItem && selectedReviewItem.kb_id === item.kb_id ? 'bg-sap-50 dark:bg-sap-600/20 border-l-4 border-sap-600' : 'border-l-4 border-transparent hover:bg-gray-50 dark:hover:bg-gray-700'"
+                  class="w-full text-left px-4 py-3 border-b border-gray-100 dark:border-gray-700 transition">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                    :class="{
+                      'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300': item.status === 'DRAFT',
+                      'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300': item.status === 'APPROVED',
+                      'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300': item.status === 'REJECTED',
+                    }" x-text="item.status"></span>
+              <span class="text-xs text-gray-400 dark:text-gray-500" x-text="item.type"></span>
+            </div>
+            <div class="text-sm font-medium text-gray-800 dark:text-gray-100 mt-1" x-text="item.title"></div>
+            <div class="text-xs text-gray-400 dark:text-gray-500 mt-1">v<span x-text="item.version"></span></div>
+          </button>
+        </template>
+        <div x-show="reviewItems.length === 0" class="p-6 text-center text-sm text-gray-400 dark:text-gray-500">No hay items para revisar.</div>
+      </div>
+
+      <div class="md:col-span-2 p-6">
+        <template x-if="!selectedReviewItem">
+          <div class="h-full flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm">Selecciona un borrador para revisar.</div>
+        </template>
+        <template x-if="selectedReviewItem">
+          <div class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Type</label>
+                <input :value="selectedReviewItem.type" disabled class="w-full border dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-300">
+              </div>
+              <div>
+                <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Status</label>
+                <input :value="selectedReviewItem.status" disabled class="w-full border dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-300">
+              </div>
+            </div>
+            <div>
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Title</label>
+              <input x-model="selectedReviewItem.title" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Tags</label>
+                <input x-model="reviewTagsStr" class="w-full border dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+              </div>
+              <div>
+                <label class="text-xs font-medium text-gray-500 dark:text-gray-400">SAP Objects</label>
+                <input x-model="reviewSapStr" class="w-full border dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+              </div>
+            </div>
+            <div>
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Content (Markdown)</label>
+              <textarea x-model="selectedReviewItem.content_markdown" rows="12"
+                        class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-mono bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
+            </div>
+            <div class="flex flex-wrap gap-3 items-center">
+              <button @click="approveReviewItem()" :disabled="reviewProcessing"
+                      class="bg-green-600 hover:bg-green-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
+                Approve & Index
+              </button>
+              <button @click="rejectReviewItem()" :disabled="reviewProcessing"
+                      class="bg-red-600 hover:bg-red-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
+                Reject
+              </button>
+              <span x-show="reviewMessage" class="text-sm" :class="reviewMessageType === 'error' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'" x-text="reviewMessage"></span>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -93,6 +192,15 @@ function ingestApp() {
     statusMsg: '',
     statusType: 'success',
     result: '',
+    reviewItems: [],
+    selectedReviewItem: null,
+    reviewScope: 'standard',
+    reviewStatusFilter: 'DRAFT',
+    reviewTagsStr: '',
+    reviewSapStr: '',
+    reviewProcessing: false,
+    reviewMessage: '',
+    reviewMessageType: 'success',
 
     handleFile(e) { this.file = e.target.files[0]; this.fileName = this.file?.name || ''; },
     handleDrop(e) {
@@ -137,8 +245,10 @@ function ingestApp() {
           const resp = await fetch('/api/ingest/' + ingestionId + '/status');
           const status = await resp.json();
           if (status.status === 'completed') {
-            this.result = 'Synthesis complete. ' + status.items_count + ' KB items created as DRAFT. Go to Review to approve them.';
+            this.result = 'Synthesis complete. ' + status.items_count + ' KB items created as DRAFT below.';
             this.statusMsg = 'Done!';
+            this.reviewScope = this.scope;
+            await this.loadReviewItems();
             break;
           } else if (status.status === 'failed') {
             this.statusMsg = status.error || 'Synthesis failed.';
@@ -151,6 +261,75 @@ function ingestApp() {
         this.statusType = 'error';
       }
       this.processing = false;
+    },
+
+    async loadReviewItems() {
+      const params = new URLSearchParams({scope: this.reviewScope});
+      if (this.reviewStatusFilter !== 'ALL') params.set('status', this.reviewStatusFilter);
+      const resp = await fetch('/api/review/items?' + params.toString());
+      this.reviewItems = await resp.json();
+      this.selectedReviewItem = null;
+    },
+
+    selectReviewItem(item) {
+      this.selectedReviewItem = {...item};
+      this.reviewTagsStr = (item.tags || []).join(', ');
+      this.reviewSapStr = (item.sap_objects || []).join(', ');
+      this.reviewMessage = '';
+    },
+
+    async approveReviewItem() {
+      if (!this.selectedReviewItem) return;
+      this.reviewProcessing = true;
+      this.reviewMessage = '';
+      const tags = this.reviewTagsStr.split(',').map(s => s.trim()).filter(Boolean);
+      const sap_objects = this.reviewSapStr.split(',').map(s => s.trim()).filter(Boolean);
+      const resp = await fetch('/api/review/items/' + this.selectedReviewItem.kb_id + '/approve', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          scope: this.reviewScope,
+          title: this.selectedReviewItem.title,
+          content_markdown: this.selectedReviewItem.content_markdown,
+          tags,
+          sap_objects,
+        }),
+      });
+      const data = await resp.json();
+      this.reviewProcessing = false;
+      if (!resp.ok) {
+        this.reviewMessage = data.error || 'Approve failed.';
+        this.reviewMessageType = 'error';
+        return;
+      }
+      if (data.indexing_warning) {
+        this.reviewMessage = 'Approved, but indexing needs attention: ' + data.indexing_warning;
+        this.reviewMessageType = 'error';
+      } else {
+        this.reviewMessage = 'Approved and indexed.';
+        this.reviewMessageType = 'success';
+      }
+      await this.loadReviewItems();
+    },
+
+    async rejectReviewItem() {
+      if (!this.selectedReviewItem) return;
+      this.reviewProcessing = true;
+      const resp = await fetch('/api/review/items/' + this.selectedReviewItem.kb_id + '/reject', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({scope: this.reviewScope}),
+      });
+      const data = await resp.json().catch(() => ({}));
+      this.reviewProcessing = false;
+      if (!resp.ok) {
+        this.reviewMessage = data.error || 'Reject failed.';
+        this.reviewMessageType = 'error';
+        return;
+      }
+      this.reviewMessage = 'Rejected.';
+      this.reviewMessageType = 'success';
+      await this.loadReviewItems();
     },
   }
 }

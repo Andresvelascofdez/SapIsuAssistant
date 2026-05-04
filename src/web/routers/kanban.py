@@ -69,6 +69,25 @@ def _get_all_repos(state):
     return repos
 
 
+def _bulk_repos_for_request(state, client_code: str | None = None):
+    explicit = (client_code or "").strip().upper()
+    if explicit:
+        repo, error = _get_kanban_repo_for_client(state, explicit)
+        if error:
+            return [], error
+        return [(explicit, repo)], None
+
+    active_code = (state.active_client_code or "").strip().upper()
+    repo = _get_kanban_repo(state)
+    if repo and active_code:
+        return [(active_code, repo)], None
+
+    repos = _get_all_repos(state)
+    if not repos:
+        return [], "No client selected and no client ticket databases found."
+    return repos, None
+
+
 def _ticket_to_dict(t, client_code=None):
     d = {
         "id": t.id,
@@ -117,12 +136,14 @@ async def list_tickets(
     active_code = (state.active_client_code or "").upper() or None
 
     if repo:
+        repo.purge_old_closed(14)
         tickets = repo.list_tickets(search=search, priority=priority, limit=limit, offset=offset)
         total = repo.count_tickets(search=search, priority=priority)
         ticket_dicts = [_ticket_to_dict(t, client_code=active_code) for t in tickets]
     else:
         all_tickets = []
         for code, r in _get_all_repos(state):
+            r.purge_old_closed(14)
             for t in r.list_tickets(search=search, priority=priority):
                 all_tickets.append((t, code))
         total = len(all_tickets)
@@ -176,6 +197,39 @@ async def create_ticket(request: Request):
         status=body.get("status") or default_status,
     )
     return _ticket_to_dict(ticket)
+
+
+@router.post("/api/kanban/tickets/bulk-close")
+async def bulk_close_tickets(request: Request):
+    state = get_state(request)
+    body = await request.json()
+    repos, error = _bulk_repos_for_request(state, body.get("client_code"))
+    if error:
+        return JSONResponse({"error": error}, status_code=400)
+
+    total = 0
+    per_client = {}
+    for code, repo in repos:
+        count = repo.close_all_tickets()
+        per_client[code] = count
+        total += count
+    return {"status": "ok", "closed": total, "per_client": per_client}
+
+
+@router.delete("/api/kanban/tickets/closed")
+async def delete_closed_tickets(request: Request, client_code: str = Query(default=None)):
+    state = get_state(request)
+    repos, error = _bulk_repos_for_request(state, client_code)
+    if error:
+        return JSONResponse({"error": error}, status_code=400)
+
+    total = 0
+    per_client = {}
+    for code, repo in repos:
+        count = repo.delete_closed_tickets()
+        per_client[code] = count
+        total += count
+    return {"status": "deleted", "deleted": total, "per_client": per_client}
 
 
 @router.put("/api/kanban/tickets/{ticket_id}/move")

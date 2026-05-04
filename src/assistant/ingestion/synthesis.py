@@ -21,7 +21,7 @@ Each item must have:
 - content_markdown: Detailed content in Markdown format
 - tags: Relevant tags (e.g., IDEX, UTILMD, MaKo, GPKE)
 - sap_objects: SAP transaction codes, programs, tables, or objects mentioned
-- signals: Additional metadata object with keys like module, process, country
+- signals: Metadata object with keys module, process, country, sap_area. Use null when unknown.
 
 Extract all relevant knowledge items from the content. Be thorough but precise.
 Return valid JSON matching the required schema."""

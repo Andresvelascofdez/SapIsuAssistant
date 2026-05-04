@@ -11,6 +11,32 @@ from pathlib import Path
 from typing import Optional
 
 
+def _snap_to_business(dt: datetime) -> datetime:
+    """If dt is in weekend zone (Fri 18:00 - Mon 09:00 UTC), snap to Fri 18:00."""
+    wd = dt.weekday()  # 0=Mon ... 6=Sun
+    if wd == 5:  # Saturday -> prev Friday 18:00
+        return (dt - timedelta(days=1)).replace(hour=18, minute=0, second=0, microsecond=0)
+    if wd == 6:  # Sunday -> prev Friday 18:00
+        return (dt - timedelta(days=2)).replace(hour=18, minute=0, second=0, microsecond=0)
+    if wd == 4 and dt.hour >= 18:  # Friday after 18:00
+        return dt.replace(hour=18, minute=0, second=0, microsecond=0)
+    if wd == 0 and dt.hour < 9:  # Monday before 09:00 -> prev Friday 18:00
+        return (dt - timedelta(days=3)).replace(hour=18, minute=0, second=0, microsecond=0)
+    return dt
+
+
+def _business_cutoff(now: datetime, days: int) -> datetime:
+    """Subtract ``days`` business days from ``now``, skipping weekends (Fri 18:00 - Mon 09:00)."""
+    cursor = _snap_to_business(now)
+    remaining = days
+    while remaining > 0:
+        cursor -= timedelta(days=1)
+        if cursor.weekday() in (5, 6):  # Skip Sat/Sun
+            continue
+        remaining -= 1
+    return cursor
+
+
 DEFAULT_COLUMNS = [
     {"name": "NO_ANALIZADO", "display_name": "No analizado", "position": 0},
     {"name": "EN_PROGRESO", "display_name": "En progreso", "position": 1},
@@ -313,6 +339,40 @@ class KanbanRepository:
             conn.commit()
         return True
 
+    def close_all_tickets(self) -> int:
+        """Move every non-CERRADO ticket to CERRADO and record history."""
+        now = datetime.now(UTC).isoformat()
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT id, status FROM tickets WHERE status != 'CERRADO'"
+            ).fetchall()
+            for internal_id, old_status in rows:
+                conn.execute(
+                    "UPDATE tickets SET status = 'CERRADO', updated_at = ?, closed_at = COALESCE(closed_at, ?) WHERE id = ?",
+                    (now, now, internal_id),
+                )
+                conn.execute(
+                    """
+                    INSERT INTO ticket_history (id, ticket_id, from_status, to_status, changed_at)
+                    VALUES (?, ?, ?, 'CERRADO', ?)
+                    """,
+                    (str(uuid.uuid4()), internal_id, old_status, now),
+                )
+            conn.commit()
+        return len(rows)
+
+    def delete_closed_tickets(self) -> int:
+        """Delete all CERRADO tickets and their history."""
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute("SELECT id FROM tickets WHERE status = 'CERRADO'").fetchall()
+            ids = [r[0] for r in rows]
+            if ids:
+                placeholders = ",".join("?" for _ in ids)
+                conn.execute(f"DELETE FROM ticket_history WHERE ticket_id IN ({placeholders})", ids)
+                conn.execute(f"DELETE FROM tickets WHERE id IN ({placeholders})", ids)
+                conn.commit()
+        return len(ids)
+
     def list_tickets(
         self,
         status: str | None = None,
@@ -403,7 +463,7 @@ class KanbanRepository:
 
     def get_stale_ticket_ids(self, days: int, statuses: list[str] | None = None) -> list[str]:
         """Return internal ids of tickets not updated in the last N days."""
-        cutoff = (datetime.now(UTC) - timedelta(days=days)).isoformat()
+        cutoff = _business_cutoff(datetime.now(UTC), days).isoformat()
         clauses = ["updated_at < ?"]
         params: list = [cutoff]
         if statuses:
@@ -488,3 +548,19 @@ class KanbanRepository:
                 )
             conn.commit()
         return self.list_columns()
+
+    def purge_old_closed(self, days: int = 14) -> int:
+        """Delete CERRADO tickets with closed_at older than N business days. Returns count deleted."""
+        cutoff = _business_cutoff(datetime.now(UTC), days).isoformat()
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT id FROM tickets WHERE status = 'CERRADO' AND closed_at IS NOT NULL AND closed_at < ?",
+                (cutoff,),
+            ).fetchall()
+            ids = [r[0] for r in rows]
+            if ids:
+                placeholders = ",".join("?" for _ in ids)
+                conn.execute(f"DELETE FROM ticket_history WHERE ticket_id IN ({placeholders})", ids)
+                conn.execute(f"DELETE FROM tickets WHERE id IN ({placeholders})", ids)
+                conn.commit()
+        return len(ids)

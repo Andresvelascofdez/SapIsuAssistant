@@ -57,9 +57,9 @@
   <!-- Stale Ticket Alerts -->
   <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
     <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Alertas de tickets estancados</h2>
-    <p class="text-sm text-gray-600 dark:text-gray-300 mb-3">Los tickets sin movimiento durante este periodo se marcaran visualmente en el tablero Kanban.</p>
+    <p class="text-sm text-gray-600 dark:text-gray-300 mb-3">Los tickets sin movimiento durante este periodo (excluyendo fines de semana) se marcaran visualmente en el tablero Kanban.</p>
     <div class="flex gap-4 items-center">
-      <label class="text-sm text-gray-700 dark:text-gray-300">Dias sin movimiento:</label>
+      <label class="text-sm text-gray-700 dark:text-gray-300">Dias laborables sin movimiento:</label>
       <input x-model.number="staleDays" type="number" min="1" max="365"
              class="w-20 border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
       <button @click="applyStaleDays()" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">Apply</button>
@@ -113,12 +113,17 @@ function settingsApp() {
     },
 
     async setApiKey() {
-      await fetch('/api/settings/apikey', {
+      const resp = await fetch('/api/settings/apikey', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({key: this.apiKey}),
       });
-      this.apiKeyMsg = 'API key set for this session.';
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        this.apiKeyMsg = data.error || 'Error setting API key.';
+        return;
+      }
+      this.apiKeyMsg = 'API key set for this session and saved to .env.';
       this.apiKey = '';
       setTimeout(() => this.apiKeyMsg = '', 3000);
     },
@@ -130,7 +135,7 @@ function settingsApp() {
         body: JSON.stringify({days: this.staleDays}),
       });
       if (resp.ok) {
-        this.staleDaysMsg = 'Umbral actualizado a ' + this.staleDays + ' dias.';
+        this.staleDaysMsg = 'Umbral actualizado a ' + this.staleDays + ' dias laborables.';
         setTimeout(() => this.staleDaysMsg = '', 3000);
       } else {
         const data = await resp.json().catch(() => ({}));

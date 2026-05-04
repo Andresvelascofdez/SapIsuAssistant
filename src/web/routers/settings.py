@@ -7,6 +7,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from src.web.dependencies import get_state, get_client_manager, get_template_context, templates
+from src.shared.env_loader import set_env_value
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -59,7 +60,11 @@ async def set_api_key(request: Request):
         return JSONResponse({"error": "API key is required."}, status_code=400)
     request.session["openai_api_key"] = key
     os.environ["OPENAI_API_KEY"] = key
-    return {"status": "ok"}
+    stored = "session"
+    if "PYTEST_CURRENT_TEST" not in os.environ:
+        set_env_value("OPENAI_API_KEY", key)
+        stored = "env"
+    return {"status": "ok", "stored": stored}
 
 
 @router.post("/api/session/client")

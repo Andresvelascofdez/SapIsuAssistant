@@ -40,6 +40,10 @@ htmlcov/
 # Data (MUST be excluded per PRACTICES.md)
 data/
 
+# Local documents / OCR fixtures (not part of source release)
+Facturas/
+tickets/
+
 # Secrets
 .env
 *.key

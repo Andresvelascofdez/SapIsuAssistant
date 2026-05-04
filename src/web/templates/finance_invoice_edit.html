@@ -370,6 +370,8 @@ function invoiceEditApp() {
           }
           if (ocrData.suggested_year) this.importYear = ocrData.suggested_year;
           if (ocrData.suggested_month) this.importMonth = ocrData.suggested_month;
+          if (ocrData.suggested_client) this.form.client_name = ocrData.suggested_client;
+          if (ocrData.suggested_invoice_number) this.form.invoice_number = ocrData.suggested_invoice_number;
           this.ocrRawText = ocrData.raw_text || '';
           if (!ocrData.suggested_amount) {
             this.ocrError = 'Could not detect amount automatically. Please enter it manually.';
@@ -393,8 +395,17 @@ function invoiceEditApp() {
           line_total: this.importAmount,
         }];
       }
-      if (this.importYear) this.form.period_year = this.importYear;
-      if (this.importMonth) this.form.period_month = this.importMonth;
+      // Period = invoice date month - 1 (work done in previous month)
+      if (this.importYear && this.importMonth) {
+        let periodMonth = this.importMonth - 1;
+        let periodYear = this.importYear;
+        if (periodMonth < 1) {
+          periodMonth = 12;
+          periodYear = this.importYear - 1;
+        }
+        this.form.period_year = periodYear;
+        this.form.period_month = periodMonth;
+      }
     },
   }
 }

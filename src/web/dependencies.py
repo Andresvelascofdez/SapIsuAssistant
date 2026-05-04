@@ -9,10 +9,12 @@ from fastapi.templating import Jinja2Templates
 
 from src.shared.app_state import AppState
 from src.shared.client_manager import ClientManager
+from src.shared.env_loader import load_env_file, read_env_file
 
 _HERE = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=_HERE / "templates")
 
+load_env_file()
 DATA_ROOT = Path(os.environ.get("SAP_DATA_ROOT", "./data"))
 
 
@@ -34,7 +36,10 @@ def get_openai_api_key(request: Request) -> str | None:
     key = request.session.get("openai_api_key")
     if key:
         return key
-    return os.environ.get("OPENAI_API_KEY")
+    key = os.environ.get("OPENAI_API_KEY")
+    if key:
+        return key
+    return read_env_file().get("OPENAI_API_KEY")
 
 
 def get_client_manager() -> ClientManager:

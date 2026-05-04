@@ -49,22 +49,71 @@
     <div x-show="showBulk" class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50" x-transition>
       <h3 class="text-sm font-semibold text-gray-800 dark:text-white mb-2">Bulk Import Expenses</h3>
       <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Select multiple PDF/image files. Each file will create an expense with the amount auto-detected via OCR. You can edit each expense afterwards.</p>
-      <div class="flex items-center gap-3">
-        <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png" @change="bulkFiles = $event.target.files" class="text-sm text-gray-600 dark:text-gray-300">
-        <button x-show="bulkFiles && bulkFiles.length > 0 && !bulkUploading" @click="bulkImport()"
+
+      <!-- File selection (before import starts) -->
+      <div x-show="!bulkActive && !bulkDone" class="flex items-center gap-3">
+        <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png" @change="bulkSelectFiles($event)" class="text-sm text-gray-600 dark:text-gray-300">
+        <button x-show="bulkFiles.length > 0" @click="bulkImport()"
                 class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
-                x-text="'Upload ' + (bulkFiles ? bulkFiles.length : 0) + ' file(s)'"></button>
-        <span x-show="bulkUploading" class="text-xs text-amber-600 dark:text-amber-400" x-text="'Processing ' + bulkProgress + '...'"></span>
+                x-text="'Upload ' + bulkFiles.length + ' file(s)'"></button>
       </div>
-      <div x-show="bulkResults.length > 0" class="mt-3 space-y-1">
-        <template x-for="r in bulkResults" :key="r.expense_id">
-          <div class="flex items-center gap-2 text-xs">
-            <span class="text-green-600 dark:text-green-400">OK</span>
-            <span class="text-gray-600 dark:text-gray-300" x-text="r.file_name"></span>
-            <span class="font-mono text-gray-800 dark:text-white" x-text="r.amount.toFixed(2) + ' EUR'"></span>
-            <span class="text-gray-400 dark:text-gray-500" x-text="r.period"></span>
+
+      <!-- Progress bar + controls (during/after import) -->
+      <div x-show="bulkActive || bulkDone" class="space-y-3">
+        <div class="flex items-center gap-3">
+          <div class="flex-1">
+            <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-3 overflow-hidden">
+              <div class="bg-sap-600 h-3 rounded-full transition-all duration-300"
+                   :style="'width: ' + (bulkTotal > 0 ? Math.round((bulkProcessed / bulkTotal) * 100) : 0) + '%'"></div>
+            </div>
           </div>
-        </template>
+          <span class="text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap"
+                x-text="bulkProcessed + '/' + bulkTotal + ' (' + (bulkTotal > 0 ? Math.round((bulkProcessed / bulkTotal) * 100) : 0) + '%)'"></span>
+          <button x-show="bulkActive" @click="bulkCancel()" class="text-sm text-red-600 dark:text-red-400 hover:underline whitespace-nowrap">Cancel</button>
+        </div>
+
+        <!-- Per-file status table -->
+        <div class="max-h-64 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-lg">
+          <table class="w-full text-xs">
+            <thead class="bg-gray-100 dark:bg-gray-600 sticky top-0">
+              <tr>
+                <th class="px-3 py-1.5 text-left font-medium text-gray-600 dark:text-gray-300 w-8">#</th>
+                <th class="px-3 py-1.5 text-left font-medium text-gray-600 dark:text-gray-300">File</th>
+                <th class="px-3 py-1.5 text-center font-medium text-gray-600 dark:text-gray-300 w-16">Status</th>
+                <th class="px-3 py-1.5 text-left font-medium text-gray-600 dark:text-gray-300">Details</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+              <template x-for="(item, idx) in bulkFiles" :key="idx">
+                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                  <td class="px-3 py-1.5 text-gray-400 dark:text-gray-500" x-text="idx + 1"></td>
+                  <td class="px-3 py-1.5 text-gray-700 dark:text-gray-200 truncate max-w-[200px]" x-text="item.name"></td>
+                  <td class="px-3 py-1.5 text-center">
+                    <span x-show="item.status === 'pending'" class="text-gray-400" title="Waiting">&#9711;</span>
+                    <span x-show="item.status === 'processing'" class="inline-block animate-spin text-amber-500" title="Processing">&#9881;</span>
+                    <span x-show="item.status === 'ok'" class="text-green-500" title="OK">&#10003;</span>
+                    <span x-show="item.status === 'warning'" class="text-amber-500" title="Warning">&#9888;</span>
+                    <span x-show="item.status === 'error'" class="text-red-500" title="Error">&#10007;</span>
+                  </td>
+                  <td class="px-3 py-1.5 text-gray-500 dark:text-gray-400" x-text="item.message || 'Waiting...'"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Summary (after done) -->
+        <div x-show="bulkDone" class="flex items-center gap-4 flex-wrap">
+          <span class="text-xs text-green-600 dark:text-green-400" x-text="bulkFiles.filter(f => f.status === 'ok').length + ' OK'"></span>
+          <span class="text-xs text-amber-600 dark:text-amber-400" x-text="bulkFiles.filter(f => f.status === 'warning').length + ' warnings'"></span>
+          <span class="text-xs text-red-600 dark:text-red-400" x-text="bulkFiles.filter(f => f.status === 'error').length + ' errors'"></span>
+          <div class="ml-auto flex gap-2">
+            <button x-show="bulkFiles.filter(f => f.status === 'error' && f.message !== 'Cancelled').length > 0"
+                    @click="bulkRetryFailed()"
+                    class="text-sm text-amber-600 dark:text-amber-400 hover:underline">Retry Failed</button>
+            <button @click="bulkReset()" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-1.5 rounded-lg text-xs font-medium transition">Done</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -212,10 +261,12 @@ function expensesApp() {
     uploading: false,
     formError: '',
     showBulk: false,
-    bulkUploading: false,
-    bulkProgress: '',
-    bulkResults: [],
-    bulkFiles: null,
+    bulkFiles: [],
+    bulkActive: false,
+    bulkCancelled: false,
+    bulkDone: false,
+    bulkProcessed: 0,
+    bulkTotal: 0,
     form: {
       period_year: currentYear,
       period_month: now.getMonth() + 1,
@@ -345,25 +396,110 @@ function expensesApp() {
     },
 
     async bulkImport() {
-      const files = this.bulkFiles;
-      if (!files || files.length === 0) return;
-      this.bulkUploading = true;
-      this.bulkResults = [];
-      this.bulkProgress = files.length + ' files';
-      const fd = new FormData();
-      for (let i = 0; i < files.length; i++) {
-        fd.append('files', files[i]);
-      }
-      try {
-        const resp = await fetch('/api/finance/expenses/bulk-import', {method: 'POST', body: fd});
-        if (resp.ok) {
+      this.bulkActive = true;
+      this.bulkCancelled = false;
+      this.bulkDone = false;
+      this.bulkProcessed = 0;
+
+      for (let i = 0; i < this.bulkFiles.length; i++) {
+        if (this.bulkCancelled) break;
+
+        const item = this.bulkFiles[i];
+        if (item.status !== 'pending') { this.bulkProcessed++; continue; }
+
+        item.status = 'processing';
+        item.message = 'Processing...';
+
+        try {
+          const fd = new FormData();
+          fd.append('files', item.file);
+          const resp = await fetch('/api/finance/expenses/bulk-import', {method: 'POST', body: fd});
+
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
           const data = await resp.json();
-          this.bulkResults = data.expenses;
+          const exp = data.expenses[0];
+
+          item.expense_id = exp.expense_id;
+          item.amount = exp.detected_amount;
+          item.merchant = exp.merchant;
+          item.period = exp.period;
+
+          if (exp.needs_review) {
+            item.status = 'warning';
+            item.message = exp.warning || 'Needs review (amount uncertain)';
+          } else {
+            item.status = 'ok';
+            item.message = 'Amount: ' + (exp.detected_amount != null ? exp.detected_amount.toFixed(2) : '?')
+                         + ' | Merchant: ' + (exp.merchant || '?')
+                         + ' | Period: ' + exp.period;
+          }
+        } catch (e) {
+          item.status = 'error';
+          item.message = 'Failed: ' + (e.message || 'unknown error');
         }
-      } catch (e) {}
-      this.bulkUploading = false;
-      this.bulkFiles = null;
+
+        this.bulkProcessed++;
+      }
+
+      if (this.bulkCancelled) {
+        for (const item of this.bulkFiles) {
+          if (item.status === 'pending') {
+            item.status = 'error';
+            item.message = 'Cancelled';
+          }
+        }
+        this.bulkProcessed = this.bulkFiles.length;
+      }
+
+      this.bulkActive = false;
+      this.bulkDone = true;
       await this.loadData();
+    },
+
+    bulkCancel() {
+      this.bulkCancelled = true;
+    },
+
+    bulkSelectFiles(event) {
+      const files = event.target.files;
+      this.bulkFiles = Array.from(files).map(f => ({
+        file: f,
+        name: f.name,
+        status: 'pending',
+        message: '',
+        expense_id: null,
+        amount: null,
+        merchant: null,
+        period: null,
+      }));
+      this.bulkTotal = this.bulkFiles.length;
+      this.bulkProcessed = 0;
+      this.bulkDone = false;
+    },
+
+    bulkRetryFailed() {
+      for (const item of this.bulkFiles) {
+        if (item.status === 'error' && item.message !== 'Cancelled') {
+          item.status = 'pending';
+          item.message = '';
+        }
+      }
+      this.bulkProcessed = this.bulkFiles.filter(f => f.status !== 'pending').length;
+      this.bulkTotal = this.bulkFiles.length;
+      this.bulkDone = false;
+      this.bulkImport();
+    },
+
+    bulkReset() {
+      this.bulkFiles = [];
+      this.bulkActive = false;
+      this.bulkDone = false;
+      this.bulkCancelled = false;
+      this.bulkProcessed = 0;
+      this.bulkTotal = 0;
+      this.showBulk = false;
+      this.loadData();
     },
   }
 }

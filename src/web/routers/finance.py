@@ -58,6 +58,7 @@ def _expense_to_dict(e):
         "category_name": e.category_name,
         "merchant": e.merchant,
         "amount": e.amount,
+        "vat_amount": e.vat_amount,
         "currency": e.currency,
         "notes": e.notes,
         "document_id": e.document_id,
@@ -259,6 +260,7 @@ async def create_expense(request: Request):
         notes=body.get("notes"),
         document_id=body.get("document_id"),
         document_not_required=body.get("document_not_required", False),
+        vat_amount=body.get("vat_amount"),
     )
     return _expense_to_dict(expense)
 
@@ -291,13 +293,14 @@ async def export_expenses_csv(
     expenses = repo.list_expenses(year=year, month=month)
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Period", "Category", "Merchant", "Amount", "Currency", "Notes", "Has Document"])
+    writer.writerow(["Period", "Category", "Merchant", "Amount", "VAT", "Currency", "Notes", "Has Document"])
     for e in expenses:
         writer.writerow([
             f"{e.period_year}-{e.period_month:02d}",
             e.category_name,
             e.merchant or "",
             f"{e.amount:.2f}",
+            f"{e.vat_amount:.2f}" if e.vat_amount is not None else "",
             e.currency,
             e.notes or "",
             "Yes" if e.document_id else ("N/A" if e.document_not_required else "MISSING"),
@@ -621,9 +624,9 @@ async def bulk_import_invoices(files: list[UploadFile] = File(...)):
         file_path = DATA_ROOT / doc.storage_path
         try:
             if mime == "application/pdf":
-                ocr_result = extract_from_pdf(file_path)
+                ocr_result = extract_from_pdf(file_path, original_filename=safe_name)
             elif mime.startswith("image/"):
-                ocr_result = extract_from_image(file_path)
+                ocr_result = extract_from_image(file_path, original_filename=safe_name)
             else:
                 ocr_result = {}
 
@@ -635,7 +638,8 @@ async def bulk_import_invoices(files: list[UploadFile] = File(...)):
 
             detected_date_iso = None
             if ocr_result.get("suggested_year") and ocr_result.get("suggested_month"):
-                detected_date_iso = f"{ocr_result['suggested_year']}-{ocr_result['suggested_month']:02d}"
+                day = ocr_result.get("suggested_day") or 1
+                detected_date_iso = f"{ocr_result['suggested_year']}-{ocr_result['suggested_month']:02d}-{day:02d}"
             repo.update_document_ocr(
                 doc.id,
                 raw_text=ocr_result.get("raw_text"),
@@ -650,20 +654,39 @@ async def bulk_import_invoices(files: list[UploadFile] = File(...)):
         if ocr_amount and ocr_amount > 0:
             items = [{"description": "Imported from " + safe_name, "quantity": 1, "unit": "HOURS", "unit_price": ocr_amount}]
 
+        # Period = invoice date month - 1 (work done in previous month)
+        period_year = ocr_year
+        period_month = ocr_month
+        if ocr_result.get("suggested_year") and ocr_result.get("suggested_month"):
+            period_month = ocr_month - 1
+            if period_month < 1:
+                period_month = 12
+                period_year = ocr_year - 1
+
+        client_name = ocr_result.get("suggested_client") or "(imported)"
+        inv_number = ocr_result.get("suggested_invoice_number") or f"IMP-{safe_name}"
+
+        notes = None
+        if ocr_result.get("needs_review"):
+            raw_snippet = (ocr_result.get("raw_text") or "")[:100] or "Empty OCR"
+            notes = f"[NEEDS REVIEW] {raw_snippet}"
+
         invoice = repo.create_invoice(
-            period_year=ocr_year,
-            period_month=ocr_month,
-            client_name="(imported)",
-            invoice_number=f"IMP-{safe_name}",
+            period_year=period_year,
+            period_month=period_month,
+            client_name=client_name,
+            invoice_number=inv_number,
             document_id=doc.id,
             items=items,
+            notes=notes,
         )
 
         results.append({
             "invoice_id": invoice.id,
             "file_name": safe_name,
             "detected_amount": ocr_amount,
-            "period": f"{ocr_year}-{ocr_month:02d}",
+            "period": f"{period_year}-{period_month:02d}",
+            "client_name": client_name,
             "total": invoice.total,
         })
 
@@ -697,18 +720,19 @@ async def bulk_import_expenses(files: list[UploadFile] = File(...)):
             file_bytes=content,
         )
 
-        ocr_amount = 0
+        ocr_amount = None
         ocr_year = now_dt.year
         ocr_month = now_dt.month
+        ocr_merchant = safe_name
+        ocr_vat = None
+        ocr_result = {}  # Initialize before try to avoid NameError
         mime = (file.content_type or "").lower()
         file_path = DATA_ROOT / doc.storage_path
         try:
             if mime == "application/pdf":
-                ocr_result = extract_from_pdf(file_path)
+                ocr_result = extract_from_pdf(file_path, original_filename=safe_name)
             elif mime.startswith("image/"):
-                ocr_result = extract_from_image(file_path)
-            else:
-                ocr_result = {}
+                ocr_result = extract_from_image(file_path, original_filename=safe_name)
 
             if ocr_result.get("suggested_amount"):
                 ocr_amount = ocr_result["suggested_amount"]
@@ -716,10 +740,14 @@ async def bulk_import_expenses(files: list[UploadFile] = File(...)):
                 ocr_year = ocr_result["suggested_year"]
             if ocr_result.get("suggested_month"):
                 ocr_month = ocr_result["suggested_month"]
+            if ocr_result.get("suggested_merchant"):
+                ocr_merchant = ocr_result["suggested_merchant"]
+            ocr_vat = ocr_result.get("suggested_vat")
 
             detected_date_iso = None
             if ocr_result.get("suggested_year") and ocr_result.get("suggested_month"):
-                detected_date_iso = f"{ocr_result['suggested_year']}-{ocr_result['suggested_month']:02d}"
+                day = ocr_result.get("suggested_day") or 1
+                detected_date_iso = f"{ocr_result['suggested_year']}-{ocr_result['suggested_month']:02d}-{day:02d}"
             repo.update_document_ocr(
                 doc.id,
                 raw_text=ocr_result.get("raw_text"),
@@ -727,23 +755,39 @@ async def bulk_import_expenses(files: list[UploadFile] = File(...)):
                 detected_date_iso=detected_date_iso,
             )
         except Exception:
-            pass
+            log.warning("OCR failed for %s", safe_name, exc_info=True)
 
-        expense = repo.create_expense(
-            period_year=ocr_year,
-            period_month=ocr_month,
-            category_id=default_cat_id,
-            amount=ocr_amount,
-            merchant=safe_name,
-            document_id=doc.id,
-        )
+        notes = None
+        if ocr_result.get("needs_review") or not ocr_amount:
+            raw_snippet = (ocr_result.get("raw_text") or "")[:100] or "Empty OCR"
+            notes = f"[NEEDS REVIEW] {raw_snippet}"
+
+        # Always create exactly one expense per file
+        final_amount = ocr_amount if ocr_amount and ocr_amount > 0 else 0.01
+        try:
+            expense = repo.create_expense(
+                period_year=ocr_year,
+                period_month=ocr_month,
+                category_id=default_cat_id,
+                amount=final_amount,
+                merchant=ocr_merchant,
+                document_id=doc.id,
+                vat_amount=ocr_vat,
+                notes=notes,
+            )
+        except Exception:
+            log.error("Failed to create expense for %s", safe_name, exc_info=True)
+            continue
 
         results.append({
             "expense_id": expense.id,
             "file_name": safe_name,
             "detected_amount": ocr_amount,
+            "merchant": ocr_merchant,
             "period": f"{ocr_year}-{ocr_month:02d}",
             "amount": expense.amount,
+            "needs_review": bool(ocr_result.get("needs_review") or not ocr_amount),
+            "warning": notes if notes and "[NEEDS REVIEW]" in (notes or "") else None,
         })
 
     return {"imported": len(results), "expenses": results}
@@ -775,7 +819,8 @@ async def run_ocr(doc_id: str):
     # Store OCR results in document
     detected_date_iso = None
     if result.get("suggested_year") and result.get("suggested_month"):
-        detected_date_iso = f"{result['suggested_year']}-{result['suggested_month']:02d}"
+        day = result.get("suggested_day") or 1
+        detected_date_iso = f"{result['suggested_year']}-{result['suggested_month']:02d}-{day:02d}"
 
     repo.update_document_ocr(
         doc_id,
@@ -789,4 +834,11 @@ async def run_ocr(doc_id: str):
         "suggested_amount": result.get("suggested_amount"),
         "suggested_year": result.get("suggested_year"),
         "suggested_month": result.get("suggested_month"),
+        "suggested_day": result.get("suggested_day"),
+        "suggested_date": result.get("suggested_date"),
+        "suggested_vat": result.get("suggested_vat"),
+        "suggested_client": result.get("suggested_client"),
+        "suggested_merchant": result.get("suggested_merchant"),
+        "suggested_invoice_number": result.get("suggested_invoice_number"),
+        "needs_review": result.get("needs_review", False),
     }

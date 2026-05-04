@@ -59,6 +59,7 @@
             <span class="text-gray-600 dark:text-gray-300" x-text="r.file_name"></span>
             <span class="font-mono text-gray-800 dark:text-white" x-text="r.total.toFixed(2) + ' EUR'"></span>
             <span class="text-gray-400 dark:text-gray-500" x-text="r.period"></span>
+            <span x-show="r.client_name && r.client_name !== '(imported)'" class="text-gray-600 dark:text-gray-300" x-text="r.client_name"></span>
             <a :href="'/finance/invoices/' + r.invoice_id + '/edit'" class="text-sap-600 dark:text-sap-400 hover:underline">Edit</a>
           </div>
         </template>

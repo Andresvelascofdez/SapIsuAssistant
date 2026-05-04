@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+{% set active_tab = "incidents/detail" %}
+{% block content %}
+<div x-data="incidentDetailApp()" x-init="init()" class="max-w-6xl mx-auto space-y-4">
+  <div class="flex flex-wrap items-center gap-3">
+    <a href="/incidents" class="text-sm text-sap-600 dark:text-sap-400 hover:underline">Volver a incidencias</a>
+    <div class="flex-1"></div>
+    <button @click="saveIncident()"
+            class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+            :disabled="!incident.id">
+      Guardar
+    </button>
+    <button @click="generateKbDraft()"
+            class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+            :disabled="!incident.id || generatingKb">
+      Generate KB Draft
+    </button>
+  </div>
+
+  <div x-show="message" class="rounded-lg px-4 py-3 text-sm"
+       :class="messageType === 'error' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'"
+       x-text="message"></div>
+
+  <div x-show="!clientCode" class="bg-amber-100 dark:bg-amber-900/50 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 rounded-lg px-4 py-3 text-sm">
+    Selecciona un cliente para abrir esta incidencia.
+  </div>
+
+  <template x-if="incident.id">
+    <div class="space-y-4">
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div class="flex flex-wrap items-start gap-3 mb-4">
+          <div>
+            <div class="text-xs text-gray-500 dark:text-gray-400">Incidencia</div>
+            <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100">
+              <span class="font-mono text-green-700 dark:text-green-400" x-text="incident.incident_code"></span>
+              <span x-text="incident.title"></span>
+            </h2>
+          </div>
+          <div class="flex-1"></div>
+          <button @click="deleteIncident()" class="text-red-600 hover:text-red-700 text-sm font-medium px-3 py-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30">
+            Eliminar
+          </button>
+        </div>
+
+        <div class="space-y-4">
+          <div>
+            <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Titulo</label>
+            <input x-model="incident.title" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div>
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Estado</label>
+              <select x-model="incident.status" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+                <option value="OPEN">Open</option>
+                <option value="IN_PROGRESS">In progress</option>
+                <option value="RESOLVED">Resolved</option>
+                <option value="CLOSED">Closed</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Prioridad</label>
+              <select x-model="incident.priority" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+                <option value="LOW">Low</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="HIGH">High</option>
+                <option value="CRITICAL">Critical</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Ano</label>
+              <input x-model.number="incident.period_year" type="number" min="2000" max="2100" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+            </div>
+            <div>
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Mes</label>
+              <input x-model.number="incident.period_month" type="number" min="1" max="12" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div>
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Horas</label>
+              <input x-model.number="incident.hours_spent" type="number" min="0" step="0.25" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+            </div>
+            <div>
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Modulo SAP</label>
+              <input x-model="incident.sap_module" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+            </div>
+            <div>
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Proceso SAP</label>
+              <input x-model="incident.sap_process" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+            </div>
+            <div>
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">IP Box</label>
+              <select x-model="incident.ipbox_relevance" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+                <option value="UNCLEAR">Unclear</option>
+                <option value="QUALIFYING_CANDIDATE">Qualifying candidate</option>
+                <option value="NOT_QUALIFYING">Not qualifying</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Objetos SAP</label>
+              <input x-model="sapObjectsText" placeholder="EVER, EANL, EGERH" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+            </div>
+            <div>
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">IDs afectados</label>
+              <input x-model="affectedIdsText" placeholder="POD, MaLo, device, document number" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <template x-for="field in narrativeFields" :key="field.key">
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <label class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 block" x-text="field.label"></label>
+            <textarea x-model="incident[field.key]" rows="5" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
+          </div>
+        </template>
+      </div>
+
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div class="flex flex-wrap items-center gap-3 mb-4">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Evidencias</h3>
+          <div class="flex-1"></div>
+          <span class="text-sm text-gray-500 dark:text-gray-400" x-text="evidence.length + ' items'"></span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+          <input x-model="evidenceForm.title" placeholder="Titulo evidencia" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+          <select x-model="evidenceForm.kind" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+            <option value="FILE">File</option>
+            <option value="LINK">Link</option>
+            <option value="NOTE">Note</option>
+          </select>
+          <input x-show="evidenceForm.kind === 'LINK'" x-model="evidenceForm.url" placeholder="https://..." class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+          <input x-show="evidenceForm.kind === 'FILE'" x-ref="fileEvidence" type="file" @change="filePicked()" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+          <input x-show="evidenceForm.kind === 'NOTE'" x-model="evidenceForm.notes" placeholder="Nota corta" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+          <button @click="addEvidence()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+            Anadir
+          </button>
+        </div>
+        <textarea x-show="evidenceForm.kind !== 'NOTE'" x-model="evidenceForm.notes" rows="2" placeholder="Notas de evidencia"
+                  class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 mb-4"></textarea>
+
+        <div class="border dark:border-gray-700 rounded-lg divide-y dark:divide-gray-700 overflow-hidden">
+          <template x-for="ev in evidence" :key="ev.id">
+            <div class="px-4 py-3 flex flex-wrap items-start gap-3">
+              <div class="flex-1 min-w-0">
+                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100" x-text="ev.title"></div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">
+                  <span x-text="ev.kind"></span>
+                  <span x-show="ev.sha256"> | SHA256: <span class="font-mono" x-text="ev.sha256"></span></span>
+                </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400 truncate" x-text="ev.url || ev.storage_path || ev.notes || ''"></div>
+              </div>
+              <button @click="deleteEvidence(ev)" class="text-red-600 hover:text-red-700 text-sm font-medium">Eliminar</button>
+            </div>
+          </template>
+          <div x-show="evidence.length === 0" class="px-4 py-6 text-center text-sm text-gray-400 dark:text-gray-500">Sin evidencias adjuntas.</div>
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">KB drafts vinculados</h3>
+        <div x-show="(incident.linked_kb_ids || []).length === 0" class="text-sm text-gray-500 dark:text-gray-400">Todavia no hay borradores generados.</div>
+        <div class="flex flex-wrap gap-2">
+          <template x-for="kbId in incident.linked_kb_ids || []" :key="kbId">
+            <span class="text-xs font-mono px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300" x-text="kbId"></span>
+          </template>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+
+<script>
+function incidentDetailApp() {
+  return {
+    incidentId: '{{ incident_id }}',
+    clientCode: '{{ incident_client_code or active_client or "" }}',
+    incident: {},
+    evidence: [],
+    sapObjectsText: '',
+    affectedIdsText: '',
+    message: '',
+    messageType: 'success',
+    generatingKb: false,
+    evidenceForm: {title: '', kind: 'FILE', url: '', notes: ''},
+    narrativeFields: [
+      {key: 'problem_statement', label: 'Problem statement'},
+      {key: 'technical_uncertainty', label: 'Technical uncertainty'},
+      {key: 'investigation', label: 'Investigation'},
+      {key: 'solution', label: 'Solution'},
+      {key: 'implementation_notes', label: 'Implementation notes'},
+      {key: 'verification', label: 'Verification'},
+      {key: 'outcome', label: 'Outcome'},
+      {key: 'reusable_knowledge', label: 'Reusable knowledge'},
+    ],
+
+    init() {
+      if (this.clientCode) this.loadIncident();
+    },
+
+    setMessage(text, type='success') {
+      this.message = text;
+      this.messageType = type;
+      if (text) setTimeout(() => this.message = '', 4500);
+    },
+
+    parseCsv(text) {
+      return (text || '').split(',').map(v => v.trim()).filter(Boolean);
+    },
+
+    async loadIncident() {
+      const params = new URLSearchParams({client_code: this.clientCode});
+      const resp = await fetch('/api/incidents/' + this.incidentId + '?' + params.toString());
+      const data = await resp.json();
+      if (!resp.ok) {
+        this.setMessage(data.error || 'No se pudo cargar la incidencia.', 'error');
+        return;
+      }
+      this.incident = data;
+      this.evidence = data.evidence || [];
+      this.sapObjectsText = (data.sap_objects || []).join(', ');
+      this.affectedIdsText = (data.affected_ids || []).join(', ');
+    },
+
+    payload() {
+      const payload = Object.assign({}, this.incident);
+      payload.client_code = this.clientCode;
+      payload.sap_objects = this.parseCsv(this.sapObjectsText);
+      payload.affected_ids = this.parseCsv(this.affectedIdsText);
+      delete payload.evidence;
+      delete payload.evidence_count;
+      delete payload.created_at;
+      delete payload.updated_at;
+      delete payload.incident_code;
+      delete payload.client_code_display;
+      return payload;
+    },
+
+    async saveIncident() {
+      const resp = await fetch('/api/incidents/' + this.incidentId, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(this.payload()),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        this.setMessage(data.error || 'No se pudo guardar.', 'error');
+        return;
+      }
+      this.incident = Object.assign({}, this.incident, data);
+      this.sapObjectsText = (data.sap_objects || []).join(', ');
+      this.affectedIdsText = (data.affected_ids || []).join(', ');
+      this.setMessage('Incidencia guardada.');
+    },
+
+    filePicked() {
+      const file = this.$refs.fileEvidence && this.$refs.fileEvidence.files[0];
+      if (file && !this.evidenceForm.title) this.evidenceForm.title = file.name;
+    },
+
+    async addEvidence() {
+      const form = new FormData();
+      form.append('client_code', this.clientCode);
+      form.append('title', this.evidenceForm.title || '');
+      form.append('kind', this.evidenceForm.kind);
+      form.append('url', this.evidenceForm.url || '');
+      form.append('notes', this.evidenceForm.notes || '');
+      if (this.evidenceForm.kind === 'FILE') {
+        const file = this.$refs.fileEvidence && this.$refs.fileEvidence.files[0];
+        if (!file) {
+          this.setMessage('Selecciona un archivo.', 'error');
+          return;
+        }
+        form.append('file', file);
+      }
+      const resp = await fetch('/api/incidents/' + this.incidentId + '/evidence', {
+        method: 'POST',
+        body: form,
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        this.setMessage(data.error || 'No se pudo anadir la evidencia.', 'error');
+        return;
+      }
+      this.evidence.unshift(data);
+      this.evidenceForm = {title: '', kind: 'FILE', url: '', notes: ''};
+      if (this.$refs.fileEvidence) this.$refs.fileEvidence.value = '';
+      this.setMessage('Evidencia anadida.');
+    },
+
+    async deleteEvidence(ev) {
+      if (!confirm('Eliminar esta evidencia?')) return;
+      const params = new URLSearchParams({client_code: this.clientCode});
+      const resp = await fetch('/api/incidents/' + this.incidentId + '/evidence/' + ev.id + '?' + params.toString(), {
+        method: 'DELETE',
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        this.setMessage(data.error || 'No se pudo eliminar la evidencia.', 'error');
+        return;
+      }
+      this.evidence = this.evidence.filter(item => item.id !== ev.id);
+      this.setMessage('Evidencia eliminada.');
+    },
+
+    async generateKbDraft() {
+      this.generatingKb = true;
+      const resp = await fetch('/api/incidents/' + this.incidentId + '/generate-kb-draft', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({client_code: this.clientCode}),
+      });
+      const data = await resp.json();
+      this.generatingKb = false;
+      if (!resp.ok) {
+        this.setMessage(data.error || 'No se pudo generar el borrador KB.', 'error');
+        return;
+      }
+      await this.loadIncident();
+      this.setMessage('KB draft generado: ' + data.kb_id);
+    },
+
+    async deleteIncident() {
+      if (!confirm('Eliminar esta incidencia y sus evidencias registradas?')) return;
+      const params = new URLSearchParams({client_code: this.clientCode});
+      const resp = await fetch('/api/incidents/' + this.incidentId + '?' + params.toString(), {
+        method: 'DELETE',
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        this.setMessage(data.error || 'No se pudo eliminar la incidencia.', 'error');
+        return;
+      }
+      window.location.href = '/incidents';
+    },
+  }
+}
+</script>
+{% endblock %}

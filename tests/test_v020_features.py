@@ -1822,9 +1822,9 @@ class TestStaleTickets:
         t1 = repo.create_ticket(title="Fresh")
         t2 = repo.create_ticket(title="Old")
 
-        # Manually age t2
+        # Manually age t2 (15 cal days guarantees 9+ business days)
         import sqlite3
-        old_date = (datetime.now(UTC) - timedelta(days=5)).isoformat()
+        old_date = (datetime.now(UTC) - timedelta(days=15)).isoformat()
         with sqlite3.connect(tmp_path / "k.db") as conn:
             conn.execute("UPDATE tickets SET updated_at = ? WHERE id = ?", (old_date, t2.id))
 
@@ -1836,13 +1836,14 @@ class TestStaleTickets:
         repo = KanbanRepository(tmp_path / "k.db", seed_columns=True)
         t = repo.create_ticket(title="Test")
 
+        # Age by 15 cal days (9+ business days)
         import sqlite3
-        old_date = (datetime.now(UTC) - timedelta(days=2)).isoformat()
+        old_date = (datetime.now(UTC) - timedelta(days=15)).isoformat()
         with sqlite3.connect(tmp_path / "k.db") as conn:
             conn.execute("UPDATE tickets SET updated_at = ? WHERE id = ?", (old_date, t.id))
 
-        assert t.id not in repo.get_stale_ticket_ids(3)
-        assert t.id in repo.get_stale_ticket_ids(1)
+        assert t.id not in repo.get_stale_ticket_ids(20)
+        assert t.id in repo.get_stale_ticket_ids(3)
 
     def test_get_stale_ticket_ids_with_status_filter(self, tmp_path):
         repo = KanbanRepository(tmp_path / "k.db", seed_columns=True)
@@ -1850,7 +1851,7 @@ class TestStaleTickets:
         t2 = repo.create_ticket(title="Closed", status="CERRADO")
 
         import sqlite3
-        old_date = (datetime.now(UTC) - timedelta(days=5)).isoformat()
+        old_date = (datetime.now(UTC) - timedelta(days=15)).isoformat()
         with sqlite3.connect(tmp_path / "k.db") as conn:
             conn.execute("UPDATE tickets SET updated_at = ? WHERE id = ?", (old_date, t1.id))
             conn.execute("UPDATE tickets SET updated_at = ? WHERE id = ?", (old_date, t2.id))
@@ -1897,7 +1898,7 @@ class TestStaleTicketsAPI:
         # Age the ticket directly in DB
         import sqlite3
         db_path = tmp_path / "clients" / "TST" / "kanban.sqlite"
-        old_date = (datetime.now(UTC) - timedelta(days=5)).isoformat()
+        old_date = (datetime.now(UTC) - timedelta(days=15)).isoformat()
         with sqlite3.connect(db_path) as conn:
             conn.execute("UPDATE tickets SET updated_at = ? WHERE id = ?", (old_date, ticket["id"]))
 
@@ -1922,7 +1923,7 @@ class TestStaleTicketsAPI:
 
         import sqlite3
         db_path = tmp_path / "clients" / "TST" / "kanban.sqlite"
-        old_date = (datetime.now(UTC) - timedelta(days=5)).isoformat()
+        old_date = (datetime.now(UTC) - timedelta(days=15)).isoformat()
         with sqlite3.connect(db_path) as conn:
             conn.execute("UPDATE tickets SET updated_at = ? WHERE id = ?", (old_date, ticket["id"]))
 
@@ -1958,3 +1959,338 @@ class TestStaleDaysSettingAPI:
 
         resp = client.post("/api/settings/stale-days", json={"days": "abc"})
         assert resp.status_code == 400
+
+
+class TestBusinessCutoff:
+    """Unit tests for _snap_to_business and _business_cutoff helpers."""
+
+    def test_snap_weekday_unchanged(self):
+        """Wednesday 14:00 is normal business time, stays unchanged."""
+        from src.kanban.storage.kanban_repository import _snap_to_business
+        # 2026-02-18 is Wednesday
+        dt = datetime(2026, 2, 18, 14, 0, 0, tzinfo=UTC)
+        assert _snap_to_business(dt) == dt
+
+    def test_snap_saturday_to_friday(self):
+        """Saturday snaps back to Friday 18:00."""
+        from src.kanban.storage.kanban_repository import _snap_to_business
+        # 2026-02-21 is Saturday
+        sat = datetime(2026, 2, 21, 10, 0, 0, tzinfo=UTC)
+        result = _snap_to_business(sat)
+        assert result == datetime(2026, 2, 20, 18, 0, 0, tzinfo=UTC)
+        assert result.weekday() == 4  # Friday
+
+    def test_snap_sunday_to_friday(self):
+        """Sunday snaps back to Friday 18:00."""
+        from src.kanban.storage.kanban_repository import _snap_to_business
+        # 2026-02-22 is Sunday
+        sun = datetime(2026, 2, 22, 15, 0, 0, tzinfo=UTC)
+        result = _snap_to_business(sun)
+        assert result == datetime(2026, 2, 20, 18, 0, 0, tzinfo=UTC)
+        assert result.weekday() == 4  # Friday
+
+    def test_snap_friday_after_1800(self):
+        """Friday 20:00 snaps to Friday 18:00."""
+        from src.kanban.storage.kanban_repository import _snap_to_business
+        # 2026-02-20 is Friday
+        fri_late = datetime(2026, 2, 20, 20, 0, 0, tzinfo=UTC)
+        result = _snap_to_business(fri_late)
+        assert result == datetime(2026, 2, 20, 18, 0, 0, tzinfo=UTC)
+
+    def test_snap_monday_before_0900(self):
+        """Monday 08:00 snaps back to previous Friday 18:00."""
+        from src.kanban.storage.kanban_repository import _snap_to_business
+        # 2026-02-23 is Monday
+        mon_early = datetime(2026, 2, 23, 8, 0, 0, tzinfo=UTC)
+        result = _snap_to_business(mon_early)
+        assert result == datetime(2026, 2, 20, 18, 0, 0, tzinfo=UTC)
+        assert result.weekday() == 4  # Friday
+
+    def test_snap_monday_at_0900(self):
+        """Monday 09:00 is business time, stays unchanged."""
+        from src.kanban.storage.kanban_repository import _snap_to_business
+        mon = datetime(2026, 2, 23, 9, 0, 0, tzinfo=UTC)
+        assert _snap_to_business(mon) == mon
+
+    def test_snap_friday_at_1759(self):
+        """Friday 17:59 is still business time, stays unchanged."""
+        from src.kanban.storage.kanban_repository import _snap_to_business
+        fri = datetime(2026, 2, 20, 17, 59, 0, tzinfo=UTC)
+        assert _snap_to_business(fri) == fri
+
+    def test_cutoff_no_weekend_crossing(self):
+        """Wed 14:00, days=2 -> Mon 14:00 (no weekend crossed)."""
+        from src.kanban.storage.kanban_repository import _business_cutoff
+        wed = datetime(2026, 2, 18, 14, 0, 0, tzinfo=UTC)
+        result = _business_cutoff(wed, 2)
+        assert result == datetime(2026, 2, 16, 14, 0, 0, tzinfo=UTC)  # Monday
+        assert result.weekday() == 0
+
+    def test_cutoff_crosses_one_weekend(self):
+        """Wed 14:00, days=3 -> Fri 14:00 (skips Sat+Sun)."""
+        from src.kanban.storage.kanban_repository import _business_cutoff
+        wed = datetime(2026, 2, 18, 14, 0, 0, tzinfo=UTC)
+        result = _business_cutoff(wed, 3)
+        assert result == datetime(2026, 2, 13, 14, 0, 0, tzinfo=UTC)  # Friday
+        assert result.weekday() == 4
+
+    def test_cutoff_from_monday(self):
+        """Mon 10:00, days=1 -> Fri 10:00 (skips weekend)."""
+        from src.kanban.storage.kanban_repository import _business_cutoff
+        mon = datetime(2026, 2, 23, 10, 0, 0, tzinfo=UTC)
+        result = _business_cutoff(mon, 1)
+        assert result == datetime(2026, 2, 20, 10, 0, 0, tzinfo=UTC)  # Friday
+        assert result.weekday() == 4
+
+    def test_cutoff_from_saturday(self):
+        """Sat 12:00 -> snap to Fri 18:00, days=1 -> Thu 18:00."""
+        from src.kanban.storage.kanban_repository import _business_cutoff
+        sat = datetime(2026, 2, 21, 12, 0, 0, tzinfo=UTC)
+        result = _business_cutoff(sat, 1)
+        assert result == datetime(2026, 2, 19, 18, 0, 0, tzinfo=UTC)  # Thursday
+        assert result.weekday() == 3
+
+    def test_cutoff_crosses_two_weekends(self):
+        """Wed 14:00, days=8 -> Wed 14:00 two weeks ago (skips 4 weekend days)."""
+        from src.kanban.storage.kanban_repository import _business_cutoff
+        wed = datetime(2026, 2, 18, 14, 0, 0, tzinfo=UTC)
+        result = _business_cutoff(wed, 8)
+        assert result == datetime(2026, 2, 6, 14, 0, 0, tzinfo=UTC)  # Friday
+        assert result.weekday() == 4
+
+    def test_stale_weekend_not_counted(self, tmp_path):
+        """Ticket updated Friday should NOT be stale on Monday with threshold=1."""
+        repo = KanbanRepository(tmp_path / "k.db", seed_columns=True)
+        t = repo.create_ticket(title="Friday ticket")
+
+        import sqlite3
+        from unittest.mock import patch
+
+        # Ticket updated Friday 17:00
+        friday = datetime(2026, 2, 20, 17, 0, 0, tzinfo=UTC)
+        with sqlite3.connect(tmp_path / "k.db") as conn:
+            conn.execute("UPDATE tickets SET updated_at = ? WHERE id = ?",
+                         (friday.isoformat(), t.id))
+
+        # "Now" is Monday 10:00 — only 1 hour of business time passed (Fri 17:00-18:00)
+        monday = datetime(2026, 2, 23, 10, 0, 0, tzinfo=UTC)
+        import src.kanban.storage.kanban_repository as kr_mod
+        original_cutoff = kr_mod._business_cutoff
+        with patch.object(kr_mod, '_business_cutoff',
+                          lambda now, days: original_cutoff(monday, days)):
+            stale = repo.get_stale_ticket_ids(1)
+        assert t.id not in stale  # Not stale — weekend doesn't count
+
+    def test_stale_business_days_counted(self, tmp_path):
+        """Ticket updated Monday should be stale on Thursday with threshold=2."""
+        repo = KanbanRepository(tmp_path / "k.db", seed_columns=True)
+        t = repo.create_ticket(title="Monday ticket")
+
+        import sqlite3
+        from unittest.mock import patch
+
+        # Ticket updated Monday 10:00
+        monday = datetime(2026, 2, 16, 10, 0, 0, tzinfo=UTC)
+        with sqlite3.connect(tmp_path / "k.db") as conn:
+            conn.execute("UPDATE tickets SET updated_at = ? WHERE id = ?",
+                         (monday.isoformat(), t.id))
+
+        # "Now" is Thursday 14:00 — 3 business days passed (Mon, Tue, Wed)
+        thursday = datetime(2026, 2, 19, 14, 0, 0, tzinfo=UTC)
+        import src.kanban.storage.kanban_repository as kr_mod
+        original_cutoff = kr_mod._business_cutoff
+        with patch.object(kr_mod, '_business_cutoff',
+                          lambda now, days: original_cutoff(thursday, days)):
+            stale = repo.get_stale_ticket_ids(2)
+        assert t.id in stale  # Stale — 3 biz days > threshold of 2
+
+
+# ── Purge old closed tickets ──
+
+
+class TestPurgeOldClosed:
+    def test_purge_deletes_old_cerrado(self, tmp_path):
+        """CERRADO ticket with closed_at older than 14 business days should be deleted."""
+        repo = KanbanRepository(tmp_path / "k.db", seed_columns=True)
+        t = repo.create_ticket(title="Old closed")
+        repo.update_status(t.id, "CERRADO")
+
+        # Age closed_at to 20 calendar days ago (well over 14 business days)
+        old_date = (datetime.now(UTC) - timedelta(days=30)).isoformat()
+        with sqlite3.connect(tmp_path / "k.db") as conn:
+            conn.execute("UPDATE tickets SET closed_at = ?, updated_at = ? WHERE id = ?",
+                         (old_date, old_date, t.id))
+
+        deleted = repo.purge_old_closed(14)
+        assert deleted == 1
+        assert repo.get_by_id(t.id) is None
+
+    def test_purge_keeps_recent_cerrado(self, tmp_path):
+        """Recently closed CERRADO ticket should NOT be deleted."""
+        repo = KanbanRepository(tmp_path / "k.db", seed_columns=True)
+        t = repo.create_ticket(title="Recent closed")
+        repo.update_status(t.id, "CERRADO")
+
+        # closed_at is set automatically to now, so purge should keep it
+        deleted = repo.purge_old_closed(14)
+        assert deleted == 0
+        assert repo.get_by_id(t.id) is not None
+
+    def test_purge_keeps_non_cerrado(self, tmp_path):
+        """Ticket in EN_PROGRESO should NOT be purged even if old."""
+        repo = KanbanRepository(tmp_path / "k.db", seed_columns=True)
+        t = repo.create_ticket(title="Old in progress")
+
+        # Age updated_at far back
+        old_date = (datetime.now(UTC) - timedelta(days=30)).isoformat()
+        with sqlite3.connect(tmp_path / "k.db") as conn:
+            conn.execute("UPDATE tickets SET updated_at = ? WHERE id = ?",
+                         (old_date, t.id))
+
+        deleted = repo.purge_old_closed(14)
+        assert deleted == 0
+        assert repo.get_by_id(t.id) is not None
+
+    def test_purge_returns_count(self, tmp_path):
+        """purge_old_closed should return exact count of deleted tickets."""
+        repo = KanbanRepository(tmp_path / "k.db", seed_columns=True)
+        old_date = (datetime.now(UTC) - timedelta(days=30)).isoformat()
+
+        for i in range(3):
+            t = repo.create_ticket(title=f"Old closed {i}")
+            repo.update_status(t.id, "CERRADO")
+            with sqlite3.connect(tmp_path / "k.db") as conn:
+                conn.execute("UPDATE tickets SET closed_at = ?, updated_at = ? WHERE id = ?",
+                             (old_date, old_date, t.id))
+
+        # Also create a recent one that should survive
+        recent = repo.create_ticket(title="Recent closed")
+        repo.update_status(recent.id, "CERRADO")
+
+        deleted = repo.purge_old_closed(14)
+        assert deleted == 3
+        assert repo.get_by_id(recent.id) is not None
+
+    def test_purge_cascades_history(self, tmp_path):
+        """Purging a ticket should also delete its history entries."""
+        repo = KanbanRepository(tmp_path / "k.db", seed_columns=True)
+        t = repo.create_ticket(title="With history")
+        repo.update_status(t.id, "TESTING")
+        repo.update_status(t.id, "CERRADO")
+        assert len(repo.get_history(t.id)) == 3  # created + TESTING + CERRADO
+
+        # Age it
+        old_date = (datetime.now(UTC) - timedelta(days=30)).isoformat()
+        with sqlite3.connect(tmp_path / "k.db") as conn:
+            conn.execute("UPDATE tickets SET closed_at = ?, updated_at = ? WHERE id = ?",
+                         (old_date, old_date, t.id))
+
+        repo.purge_old_closed(14)
+        assert repo.get_by_id(t.id) is None
+        assert len(repo.get_history(t.id)) == 0
+
+    def test_purge_respects_business_days(self, tmp_path):
+        """Ticket closed 10 calendar days ago on a Friday should NOT be purged with threshold 14."""
+        repo = KanbanRepository(tmp_path / "k.db", seed_columns=True)
+        t = repo.create_ticket(title="Recent-ish closed")
+        repo.update_status(t.id, "CERRADO")
+
+        # Closed 5 calendar days ago — under 14 business days
+        recent_date = (datetime.now(UTC) - timedelta(days=5)).isoformat()
+        with sqlite3.connect(tmp_path / "k.db") as conn:
+            conn.execute("UPDATE tickets SET closed_at = ?, updated_at = ? WHERE id = ?",
+                         (recent_date, recent_date, t.id))
+
+        deleted = repo.purge_old_closed(14)
+        assert deleted == 0
+        assert repo.get_by_id(t.id) is not None
+
+    def test_purge_ignores_null_closed_at(self, tmp_path):
+        """CERRADO ticket without closed_at should NOT be purged (defensive)."""
+        repo = KanbanRepository(tmp_path / "k.db", seed_columns=True)
+        t = repo.create_ticket(title="No closed_at", status="CERRADO")
+
+        # Force closed_at to NULL
+        with sqlite3.connect(tmp_path / "k.db") as conn:
+            conn.execute("UPDATE tickets SET closed_at = NULL WHERE id = ?", (t.id,))
+
+        deleted = repo.purge_old_closed(14)
+        assert deleted == 0
+        assert repo.get_by_id(t.id) is not None
+
+
+# ── API: Purge triggers on list_tickets ──
+
+
+class TestPurgeOnListTickets:
+    @pytest.fixture
+    def client(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SAP_DATA_ROOT", str(tmp_path))
+        import src.web.dependencies as deps
+        monkeypatch.setattr(deps, "DATA_ROOT", tmp_path)
+
+        from src.shared.client_manager import ClientManager
+        cm = ClientManager(tmp_path)
+        cm.register_client("TST", "Test Client")
+
+        from src.web.app import app
+        from starlette.testclient import TestClient
+        c = TestClient(app)
+        c.post("/api/session/client", json={"code": "TST"})
+        return c
+
+    def test_list_tickets_triggers_purge(self, client, tmp_path):
+        """Old CERRADO ticket should be automatically purged when loading tickets."""
+        # Create a ticket via API
+        resp = client.post("/api/kanban/tickets", json={
+            "title": "Auto purge me",
+            "priority": "MEDIUM",
+            "client_code": "TST",
+        })
+        assert resp.status_code == 200
+        ticket_id = resp.json()["id"]
+
+        # Move to CERRADO via API
+        resp = client.put(f"/api/kanban/tickets/{ticket_id}/move", json={
+            "status": "CERRADO",
+            "client_code": "TST",
+        })
+        assert resp.status_code == 200
+
+        # Age the closed_at far back directly in DB
+        client_db = tmp_path / "clients" / "TST" / "kanban.sqlite"
+        old_date = (datetime.now(UTC) - timedelta(days=30)).isoformat()
+        with sqlite3.connect(client_db) as conn:
+            conn.execute("UPDATE tickets SET closed_at = ?, updated_at = ? WHERE id = ?",
+                         (old_date, old_date, ticket_id))
+
+        # Now list tickets — purge should run automatically
+        resp = client.get("/api/kanban/tickets")
+        assert resp.status_code == 200
+        data = resp.json()
+        ticket_ids = [t["id"] for t in data["tickets"]]
+        assert ticket_id not in ticket_ids
+
+    def test_list_tickets_keeps_recent_cerrado(self, client, tmp_path):
+        """Recently closed ticket should still appear after list_tickets."""
+        resp = client.post("/api/kanban/tickets", json={
+            "title": "Keep me",
+            "priority": "LOW",
+            "client_code": "TST",
+        })
+        assert resp.status_code == 200
+        ticket_id = resp.json()["id"]
+
+        # Move to CERRADO
+        resp = client.put(f"/api/kanban/tickets/{ticket_id}/move", json={
+            "status": "CERRADO",
+            "client_code": "TST",
+        })
+        assert resp.status_code == 200
+
+        # List tickets — recent CERRADO should survive
+        resp = client.get("/api/kanban/tickets")
+        assert resp.status_code == 200
+        data = resp.json()
+        ticket_ids = [t["id"] for t in data["tickets"]]
+        assert ticket_id in ticket_ids

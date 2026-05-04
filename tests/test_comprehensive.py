@@ -1229,13 +1229,14 @@ class TestFinanceEdgeCases:
         from src.finance.ocr.ocr_service import _extract_dates
         dates = _extract_dates("First: 2025-01-15, Second: 2025-06-20")
         assert len(dates) >= 2
-        assert (2025, 1) in dates
+        assert (2025, 1, 15) in dates
 
     def test_ocr_extract_multiple_amounts(self):
         from src.finance.ocr.ocr_service import _extract_amounts
+        # When TOTAL keyword is found, SUBTOTAL is excluded ((?<!SUB)TOTAL)
         amounts = _extract_amounts("SUBTOTAL: 100.00\nTOTAL: 250.00")
-        assert 100.0 in amounts
         assert 250.0 in amounts
+        assert 100.0 not in amounts  # SUBTOTAL excluded when real TOTAL exists
 
     def test_ocr_european_comma_decimal(self):
         from src.finance.ocr.ocr_service import _parse_number

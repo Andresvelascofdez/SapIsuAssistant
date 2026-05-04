@@ -1,5 +1,43 @@
 # Changelog
 
+## v0.4.0 (2026-05-04)
+
+### Incidencias SAP IS-U + IP Box (NEW)
+
+- Nuevo modulo `Incidencias` para registrar incidencias tecnicas SAP IS-U por cliente.
+- Almacenamiento aislado por cliente en `data/clients/<CLIENT_CODE>/incidents.sqlite`.
+- Evidencias por incidencia como archivo, link o nota, con SHA256 para ficheros subidos.
+- Pantallas `/incidents`, `/incidents/{id}` y `/ipbox/dossier`.
+- APIs CRUD de incidencias, evidencias, generacion de KB draft y dossier anual PDF.
+- Dossier IP Box anual en ingles con metodologia, totales, tablas y apendices por incidencia candidata.
+
+### Assistant / Ingesta
+
+- Los borradores KB pendientes se revisan ahora dentro de Ingesta; `/review` queda como ruta legacy.
+- Las incidencias pueden generar borradores KB en estado `DRAFT`, sin auto-aprobacion ni indexado directo.
+- Correccion de schema estricto para `signals` en sintesis OpenAI.
+- La API key de OpenAI se carga desde entorno, `.env` o Settings; Settings persiste la clave en `.env` fuera de tests.
+- Mensajes del chat actualizados para dirigir al usuario a la cola de borradores en Ingesta.
+
+### Kanban
+
+- Nuevas acciones masivas para cerrar todos los tickets y borrar todos los tickets cerrados.
+- Se mantiene la limpieza automatica de tickets cerrados antiguos al listar tickets.
+- UI de Kanban actualizada con botones para las acciones masivas.
+
+### Chat / UI
+
+- Boton visible para borrar el chat activo y papelera visible por sesion.
+- Incidencias incorpora botones explicitos de buscar/limpiar y contador de resultados.
+- Navegacion principal actualizada con Incidencias e IP Box.
+
+### Tests
+
+- Nuevos tests para repositorio/API/PDF de incidencias, aislamiento por cliente, evidencias y KB drafts.
+- Nuevos tests de `.env` y schema de sintesis OpenAI.
+- Nuevos tests de acciones masivas Kanban y controles UI de chat/incidencias.
+- Regresion ejecutada sobre suites principales de Assistant/Kanban/Finance no OCR-heavy.
+
 ## v0.3.0 (2026-02-13)
 
 ### Finance Module (NEW)

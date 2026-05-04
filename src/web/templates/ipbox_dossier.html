@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% set active_tab = "ipbox/dossier" %}
+{% block content %}
+<div x-data="ipboxDossierApp()" class="max-w-4xl mx-auto space-y-6">
+  <div>
+    <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100">IP Box Evidence Dossier</h2>
+    <p class="text-sm text-gray-500 dark:text-gray-400">
+      Genera un PDF anual en ingles con incidencias, horas, evidencias y trazabilidad tecnica para revision del asesor.
+    </p>
+  </div>
+
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Annual PDF</h3>
+    <div class="flex flex-wrap items-end gap-3">
+      <div>
+        <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Year</label>
+        <input x-model.number="year" type="number" min="2000" max="2100"
+               class="w-24 border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+      </div>
+      <button @click="generatePdf()"
+              class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+        Generate PDF
+      </button>
+    </div>
+    <p x-show="message" class="mt-3 text-sm" :class="messageType === 'error' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'" x-text="message"></p>
+  </div>
+
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Scope</h3>
+    <div class="space-y-2 text-sm text-gray-600 dark:text-gray-300">
+      <p>The dossier is an evidence pack, not a tax calculation.</p>
+      <p>It includes annual totals, totals by client, totals by SAP process/module, an incident register, qualifying-candidate appendices, evidence references and SHA256 hashes.</p>
+      <p>It does not calculate QE/OE, nexus fraction, tax savings or final Cyprus IP Box eligibility.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+function ipboxDossierApp() {
+  return {
+    year: {{ current_year }},
+    message: '',
+    messageType: 'success',
+    generatePdf() {
+      if (!this.year) {
+        this.message = 'Year is required.';
+        this.messageType = 'error';
+        return;
+      }
+      this.message = 'Generating PDF...';
+      this.messageType = 'success';
+      window.open('/api/ipbox/dossier?year=' + encodeURIComponent(this.year), '_blank');
+    },
+  }
+}
+</script>
+{% endblock %}

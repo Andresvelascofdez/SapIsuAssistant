@@ -97,18 +97,23 @@ class ClientManager:
           assistant_kb.sqlite
           uploads/
           kanban.sqlite
+          incidents.sqlite
+          incident_evidence/
         """
         client_dir = self.get_client_dir(code)
         client_dir.mkdir(parents=True, exist_ok=True)
 
         uploads_dir = client_dir / "uploads"
         uploads_dir.mkdir(exist_ok=True)
+        evidence_dir = client_dir / "incident_evidence"
+        evidence_dir.mkdir(exist_ok=True)
 
         # Create empty SQLite files (will be initialized by respective modules)
         assistant_db = client_dir / "assistant_kb.sqlite"
         kanban_db = client_dir / "kanban.sqlite"
+        incidents_db = client_dir / "incidents.sqlite"
 
-        for db_path in [assistant_db, kanban_db]:
+        for db_path in [assistant_db, kanban_db, incidents_db]:
             if not db_path.exists():
                 # Create empty database file
                 with sqlite3.connect(db_path):
