@@ -1,5 +1,80 @@
 # Changelog
 
+## v0.6.0 (2026-05-06)
+
+### IP Box Evidence Pack
+
+- Creado paquete documental completo bajo `docs/ip_box/` para preparar revision de asesores sobre SAP IS-U Assistant como posible activo de software protegido por copyright.
+- Incluye position paper, identificacion del activo, arquitectura tecnica, informe de desarrollo/R&D de software, indice de evidencias, decisiones tecnicas, inventario de codigo, frontera de IP de terceros, procedencia de knowledge base, procedimiento operativo interno, especificacion de usage logging, evidencias por ticket, reportes mensuales, metodologia economica de atribucion, definicion de service line, revenue mapping, input de TP/valuation, benchmark de productividad, QA evidence, controles de datos, guias internas, roadmap, notas de management y advisor pack index.
+- La documentacion distingue explicitamente entre funcionalidad existente, planned/TBC y evidencia real pendiente.
+- Se evita simular evidencias: no se inventan commits, fechas, screenshots, usage logs, horas ni tickets.
+- Se crea `AGENTS.md` con instrucciones para futuros agentes: preservar funcionalidad, mantener modularidad, no hardcodear datos reales, no inventar evidencia y usar ejemplos anonimizados.
+
+### Usage Logging and Monthly Reporting
+
+- Nuevo modulo `src/ipbox/usage_logging.py` para generar `usage_id`, hashear query/response, validar eventos y guardar usage logs JSONL por mes.
+- Nuevo modulo `src/ipbox/reporting.py` para agregar usage logs mensuales, calcular attribution percentage preliminar, generar Markdown/CSV bajo `reports/ip_box/YYYY-MM/` y exportar template de revenue mapping.
+- Nuevo template `reports/templates/revenue_mapping_template.csv`.
+- Nuevos tests `tests/test_ipbox_usage_reporting.py` para generacion de usage IDs, guardado/lectura de logs, preservacion de namespace, formula de atribucion, reporte mensual y revenue mapping template.
+- Version de app actualizada a `v0.6.0`.
+
+## v0.5.0 (2026-05-06)
+
+### Research SAP IS-U (NEW)
+
+- Nuevo pipeline controlado para convertir fuentes SAP IS-U externas en candidatos KB.
+- Source registry con fuentes priorizadas: SAP Help, SAP Learning, SAP Community, SAP Business Accelerator Hub, SAP Datasheet, LeanX, TCodeSearch, SE80, Michael Management, BDEW/EDI@Energy, SAP PRESS/Rheinwerk y blogs especializados.
+- Candidatos con tipo KB, tags, objetos SAP, signals, sources, confianza, riesgo de copyright y auditoria automatica.
+- Promocion de candidatos a KB `DRAFT` con opcion de auto-aprobar e indexar candidatos de bajo riesgo (`PASSED` + copyright `LOW`).
+- Nuevo agente `Indexer`; si Qdrant/OpenAI fallan, el item vuelve a `DRAFT` para revision manual.
+- Recoleccion puntual de URL publicas y creacion manual desde extractos/notas.
+- Bloqueo de promocion para fuentes `REFERENCE_ONLY` con riesgo alto.
+- Ejecuciones persistentes de agentes con estados por fase: Collector, Normalizer, Auditor, Ingestor e Indexer.
+- Busqueda controlada por tema y fuente con contadores de URLs descubiertas, paginas recolectadas, candidatos, borradores KB e items indexados.
+- Catalogo interno de semillas para objetos SAP frecuentes cuando la busqueda web no devuelve URLs.
+- Catalogo automatico de topicos por dominios SAP IS-U/MaKo para lanzar multiples runs sin escribir queries manuales.
+- Topic Scout amplia el catalogo con objetos SAP, transacciones, tablas, procesos EDIFACT, BPEM, APIs y S/4HANA Utilities.
+- Catalogo ampliado a 145 topicos con packs de expertise: transacciones/navegacion, customizing/SPRO, mensajes de error, ABAP/BAdIs/exits, runbooks end-to-end, MaKo versionado, S/4HANA Utilities/Fiori/API y reglas por pais fuera de Alemania.
+- El fallback del crawler selecciona topicos de forma diversa por categoria y por seed query para cubrir mas areas funcionales aunque las fuentes externas bloqueen o fallen.
+- Nuevas fuentes regulatorias `REGULATOR`: CNMC Espana, Utility Regulator Northern Ireland, Ireland Retail Market Design Service y CRE France.
+- Nuevos adaptadores directos para SAP Help y country packs: FI-CA, meter reading, device management, move-in/out, invoicing reversal, BAdIs/BAPIs, S/4HANA roles/APIs, CNMC, UREGNI, RMD Ireland y CRE.
+- Los adaptadores directos tienen prioridad sobre la busqueda generica; si la busqueda externa falla, las URLs directas ya descubiertas se conservan.
+- SAP Help usa resumenes estaticos propios para paginas publicas conocidas cuando el portal no devuelve HTML legible.
+- El Topic Extractor acepta documentos regulatorios/country-market aunque no haya objetos SAP tecnicos detectables.
+- Extraccion PDF con `pypdf` en el research fetcher para guias regulatorias y market-message publicas.
+- Nuevo crawler autonomo controlado con ejecuciones persistentes, timeline, deduplicacion de topicos descubiertos y encolado automatico de runs.
+- Nuevas tablas `crawl_runs`, `crawl_run_events` y `discovered_topics` dentro del repositorio de research.
+
+### Knowledge Types
+
+- Nuevos tipos KB: `SAP_TABLE`, `SAP_TRANSACTION`, `SAP_PROGRAM`, `SAP_MESSAGE`, `SAP_API`, `SAP_PROCESS`, `TECHNICAL_OBJECT`, `MARKET_PROCESS`, `EDIFACT_SPEC`.
+- Schema y prompt de sintesis actualizados para aceptar los tipos tecnicos nuevos.
+
+### UI / API
+
+- Ingesta incorpora una seccion `SAP IS-U Research Candidates` previa a los borradores KB.
+- Ingesta incorpora un dashboard grafico `Research Agent Runs` con timeline de eventos.
+- Ingesta incorpora `Starter topics` para lanzar temas iniciales sin escribir queries manualmente.
+- Ingesta incorpora `Run Full Catalog` para crear candidatos, KB Drafts e indexado opcional de muchos topicos automaticamente.
+- Ingesta incorpora `Autonomous Source Crawler` con agentes `Topic Scout`, `Source Crawler`, `Topic Extractor` y `Run Queuer`.
+- Ingesta incorpora `Approve & Index All` para aprobar e indexar todos los borradores KB del scope seleccionado.
+- El auditor permite auto-indexar candidatos oficiales/regulatorios de bajo riesgo con senal clara de proceso aunque no detecte tabla/transaccion SAP.
+- Listados de Ingesta ahora tienen filtros y paneles plegables para evitar scroll largo.
+- Los botones de aprobacion/indexado se ocultan cuando el item KB ya esta `APPROVED`; `Reject` queda disponible para excluirlo.
+- Los agentes de research/crawler fuerzan `Standard KB`; la ingesta especifica de cliente queda manual.
+- Nuevos endpoints `/api/research/sources`, `/api/research/candidates`, `/api/research/collect-url`, promocion a KB draft y rechazo de candidatos.
+- Nuevos endpoints `/api/research/runs` y `/api/research/runs/{id}/events` para lanzar y monitorizar agentes.
+- Nuevo endpoint `/api/research/runs/catalog` para lanzar el catalogo completo o por categoria.
+- Version de app actualizada a `v0.5.0`.
+
+### Tests
+
+- Nuevos tests para fuentes por defecto, normalizacion de objetos SAP/MaKo, deduplicacion, promocion a KB `DRAFT`, bloqueo de fuentes reference-only y controles UI.
+- Nuevos tests de orquestacion con busqueda/fetch mockeados para validar el pipeline completo sin depender de internet.
+- Nuevos tests de catalogo automatico, ejecucion por categoria e ingesta masiva a KB `DRAFT`.
+- Nuevos tests para crawler autonomo, persistencia de crawls, topicos descubiertos y encolado de runs.
+- Nuevos tests para aprobacion e indexado masivo de borradores KB.
+
 ## v0.4.0 (2026-05-04)
 
 ### Incidencias SAP IS-U + IP Box (NEW)
@@ -96,7 +171,7 @@
 - **Cliente obligatorio**: El modal de creacion exige seleccionar un cliente del dropdown antes de crear
 - **client_code en body**: El backend acepta `client_code` explicito en el body del POST, con fallback al cliente de sesion
 - **Validacion de cliente**: Si el client_code no existe, retorna 400
-- **Status vacio → default**: Si status es cadena vacia, usa la primera columna como default
+- **Status vacio â†’ default**: Si status es cadena vacia, usa la primera columna como default
 
 ### Tests
 

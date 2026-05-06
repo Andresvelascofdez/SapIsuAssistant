@@ -16,7 +16,7 @@ SYNTHESIS_SYSTEM_PROMPT = """You are a SAP IS-U knowledge engineer. Your task is
 the provided content and synthesize it into structured knowledge base items.
 
 Each item must have:
-- type: One of INCIDENT_PATTERN, ROOT_CAUSE, RESOLUTION, VERIFICATION_STEPS, CUSTOMIZING, ABAP_TECH_NOTE, GLOSSARY, RUNBOOK
+- type: One of INCIDENT_PATTERN, ROOT_CAUSE, RESOLUTION, VERIFICATION_STEPS, CUSTOMIZING, ABAP_TECH_NOTE, GLOSSARY, RUNBOOK, SAP_TABLE, SAP_TRANSACTION, SAP_PROGRAM, SAP_MESSAGE, SAP_API, SAP_PROCESS, TECHNICAL_OBJECT, MARKET_PROCESS, EDIFACT_SPEC
 - title: A clear, concise title
 - content_markdown: Detailed content in Markdown format
 - tags: Relevant tags (e.g., IDEX, UTILMD, MaKo, GPKE)

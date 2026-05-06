@@ -1,0 +1,36 @@
+# Economic Attribution Methodology
+
+This methodology is a management framework for advisor review. It does not calculate final qualifying profit or tax.
+
+## Revenue vs. Profit
+
+IP Box analysis should ultimately focus on qualifying profits, not gross revenue. Revenue mapping is a preliminary operational step used to identify which service income may be linked to the software asset.
+
+## Proprietary Software-Enabled Work
+
+The relevant distinction is between ordinary consulting and work materially assisted by the proprietary SAP IS-U Assistant. Generic AI usage alone is not enough. The evidence should show that the company software layer materially contributes to delivery.
+
+## Definitions
+
+- Productive Hours Assisted: SAP IS-U productive hours where tool output was used or partially used.
+- Software Contribution Factor: management estimate of how much the proprietary software contributed to the output.
+- Qualifying Service Factor: proportion of service activity directly related to the qualifying software-enabled service line.
+- Excluded Activities: admin, negotiation, sales, invoicing, non-technical meetings, unrelated consulting and manual work not assisted by the tool.
+
+## Formula
+
+IP Attribution % = Productive Hours Assisted / Total Productive SAP IS-U Hours x Software Contribution Factor x Qualifying Service Factor.
+
+## Scenarios
+
+### A. Maximum Position - Up To 100%
+
+Requires near-complete workflow centrality, consistent logs, ticket-level evidence, monthly reports and advisor validation.
+
+### B. Target Position - 60%
+
+Requires a high assisted-hours ratio, credible contribution factors and a clean mapping between SAP IS-U service income and tool-assisted delivery.
+
+### C. Conservative Fallback - 25%-40%
+
+May apply if the tool is meaningful but advisors consider the software contribution less central.

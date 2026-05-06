@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% set active_tab = "ingest" %}
 {% block content %}
-<div x-data="ingestApp()" x-init="loadReviewItems()" class="max-w-6xl mx-auto space-y-6">
+<div x-data="ingestApp()" x-init="init()" class="max-w-6xl mx-auto space-y-6">
 
   <!-- Scope and type selection -->
   <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
@@ -79,15 +79,543 @@
     <p class="text-sm text-gray-600 dark:text-gray-300" x-text="result"></p>
   </div>
 
+  <!-- Autonomous crawler dashboard -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+      <div class="flex flex-wrap items-center gap-3">
+        <div>
+          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Autonomous Source Crawler</h2>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Descubre topicos desde fuentes SAP y lanza runs automaticamente.</p>
+        </div>
+        <div class="flex-1"></div>
+        <button @click="crawlerCollapsed = !crawlerCollapsed"
+                class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition"
+                x-text="crawlerCollapsed ? 'Expand' : 'Collapse'"></button>
+        <button @click="loadCrawlRuns()" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition">
+          Refresh
+        </button>
+      </div>
+    </div>
+
+    <div x-show="!crawlerCollapsed" class="p-6 space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Scope</label>
+          <input value="Standard KB" disabled class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Pages/source</label>
+          <input type="number" min="1" max="20" x-model.number="crawlForm.max_pages_per_source"
+                 class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Max topics</label>
+          <input type="number" min="1" max="500" x-model.number="crawlForm.max_topics"
+                 class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        </div>
+        <div class="md:col-span-2">
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Seed queries</label>
+          <input x-model="crawlSeedQueriesStr" placeholder="SAP IS-U utilities; FI-CA; UTILMD"
+                 class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <template x-for="source in researchSources.filter(s => s.usage_policy !== 'REFERENCE_ONLY' && s.base_url)" :key="'crawl-' + source.id">
+          <label class="flex items-center gap-2 border dark:border-gray-600 rounded-lg px-3 py-2 text-xs cursor-pointer bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200">
+            <input type="checkbox" :checked="crawlForm.source_ids.includes(source.id)" @change="toggleCrawlSource(source.id)" class="text-sap-600">
+            <span x-text="source.name"></span>
+          </label>
+        </template>
+      </div>
+
+      <div class="flex flex-wrap gap-3 items-center">
+        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+          <input type="checkbox" x-model="crawlForm.auto_queue_runs" class="text-sap-600">
+          <span>Queue research runs</span>
+        </label>
+        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+          <input type="checkbox" x-model="crawlForm.auto_promote" :disabled="!crawlForm.auto_queue_runs" class="text-sap-600">
+          <span>Promote drafts</span>
+        </label>
+        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+          <input type="checkbox" x-model="crawlForm.auto_index" :disabled="!crawlForm.auto_promote || !crawlForm.auto_queue_runs" class="text-sap-600">
+          <span>Auto-index low-risk</span>
+        </label>
+        <button @click="startAutonomousCrawl()" :disabled="crawlProcessing"
+                class="bg-green-600 hover:bg-green-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
+          Start Crawler
+        </button>
+        <span x-show="crawlMessage" class="text-sm" :class="crawlMessageType === 'error' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'" x-text="crawlMessage"></span>
+      </div>
+    </div>
+
+    <div x-show="!crawlerCollapsed" class="grid grid-cols-1 md:grid-cols-3 border-t border-gray-200 dark:border-gray-700 min-h-[380px]">
+      <div class="border-r border-gray-200 dark:border-gray-700 overflow-y-auto max-h-[480px]">
+        <div class="p-3 border-b border-gray-100 dark:border-gray-700 space-y-2">
+          <input x-model="crawlFilterQuery" placeholder="Filter crawls..."
+                 class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-xs bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+          <select x-model="crawlFilterStatus" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-xs">
+            <option value="ALL">All statuses</option>
+            <option value="RUNNING">Running</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="FAILED">Failed</option>
+          </select>
+        </div>
+        <template x-for="crawl in filteredCrawlRuns()" :key="crawl.id">
+          <button @click="selectCrawlRun(crawl)"
+                  :class="selectedCrawlRun && selectedCrawlRun.id === crawl.id ? 'bg-sap-50 dark:bg-sap-600/20 border-l-4 border-sap-600' : 'border-l-4 border-transparent hover:bg-gray-50 dark:hover:bg-gray-700'"
+                  class="w-full text-left px-4 py-3 border-b border-gray-100 dark:border-gray-700 transition">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-semibold px-2 py-0.5 rounded-full" :class="runStatusClass(crawl.status)" x-text="crawl.status"></span>
+              <span class="text-xs text-gray-400 dark:text-gray-500" x-text="crawl.discovered_topic_count + ' topics / ' + crawl.queued_run_count + ' runs'"></span>
+            </div>
+            <div class="text-sm font-medium text-gray-800 dark:text-gray-100 mt-1" x-text="crawl.seed_queries.slice(0, 2).join(' · ')"></div>
+            <div class="text-xs text-gray-400 dark:text-gray-500 mt-1" x-text="crawl.fetched_page_count + ' fetched / ' + crawl.discovered_url_count + ' urls'"></div>
+          </button>
+        </template>
+        <div x-show="filteredCrawlRuns().length === 0" class="p-6 text-center text-sm text-gray-400 dark:text-gray-500">No hay crawls para el filtro actual.</div>
+      </div>
+
+      <div class="md:col-span-2 p-6">
+        <template x-if="!selectedCrawlRun">
+          <div class="h-full flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm">Lanza o selecciona un crawl para ver el trabajo.</div>
+        </template>
+        <template x-if="selectedCrawlRun">
+          <div class="space-y-5">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <template x-for="agent in ['Topic Scout', 'Source Crawler', 'Topic Extractor', 'Run Queuer']" :key="agent">
+                <div class="border dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-700">
+                  <div class="text-xs text-gray-500 dark:text-gray-400" x-text="agent"></div>
+                  <div class="mt-2 flex items-center gap-2">
+                    <span class="h-2.5 w-2.5 rounded-full" :class="agentDotClass(selectedCrawlRun.agents[agent])"></span>
+                    <span class="text-sm font-semibold text-gray-800 dark:text-gray-100" x-text="selectedCrawlRun.agents[agent]"></span>
+                  </div>
+                </div>
+              </template>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div class="border dark:border-gray-700 rounded-lg p-3">
+                <div class="text-xs text-gray-500 dark:text-gray-400">URLs</div>
+                <div class="text-xl font-semibold text-gray-800 dark:text-gray-100" x-text="selectedCrawlRun.discovered_url_count"></div>
+              </div>
+              <div class="border dark:border-gray-700 rounded-lg p-3">
+                <div class="text-xs text-gray-500 dark:text-gray-400">Fetched</div>
+                <div class="text-xl font-semibold text-gray-800 dark:text-gray-100" x-text="selectedCrawlRun.fetched_page_count"></div>
+              </div>
+              <div class="border dark:border-gray-700 rounded-lg p-3">
+                <div class="text-xs text-gray-500 dark:text-gray-400">Topics</div>
+                <div class="text-xl font-semibold text-gray-800 dark:text-gray-100" x-text="selectedCrawlRun.discovered_topic_count"></div>
+              </div>
+              <div class="border dark:border-gray-700 rounded-lg p-3">
+                <div class="text-xs text-gray-500 dark:text-gray-400">Runs</div>
+                <div class="text-xl font-semibold text-gray-800 dark:text-gray-100" x-text="selectedCrawlRun.queued_run_count"></div>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <div class="flex items-center gap-2 mb-2">
+                  <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">Crawler Timeline</h3>
+                  <button @click="loadCrawlRunEvents(selectedCrawlRun.id)" class="text-xs text-sap-600 dark:text-sap-400 hover:underline">Refresh</button>
+                </div>
+                <div class="border dark:border-gray-700 rounded-lg overflow-y-auto max-h-[240px] bg-gray-50 dark:bg-gray-900">
+                  <template x-for="event in crawlEvents" :key="event.id">
+                    <div class="px-4 py-2 border-b border-gray-100 dark:border-gray-800 text-sm">
+                      <span class="text-xs font-semibold" :class="eventLevelClass(event.level)" x-text="event.level"></span>
+                      <span class="text-xs text-gray-400 dark:text-gray-500 ml-2" x-text="event.agent"></span>
+                      <span class="text-gray-700 dark:text-gray-200 ml-2" x-text="event.message"></span>
+                    </div>
+                  </template>
+                  <div x-show="crawlEvents.length === 0" class="p-4 text-sm text-gray-400 dark:text-gray-500">Sin eventos.</div>
+                </div>
+              </div>
+              <div>
+                <div class="flex items-center gap-2 mb-2">
+                  <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">Discovered Topics</h3>
+                  <button @click="loadDiscoveredTopics()" class="text-xs text-sap-600 dark:text-sap-400 hover:underline">Refresh</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                  <input x-model="topicFilterQuery" placeholder="Filter topics..."
+                         class="border dark:border-gray-600 rounded-lg px-3 py-2 text-xs bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+                  <select x-model="topicFilterStatus" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-xs">
+                    <option value="ALL">All statuses</option>
+                    <option value="DISCOVERED">Discovered</option>
+                    <option value="QUEUED">Queued</option>
+                    <option value="INGESTED">Ingested</option>
+                    <option value="REJECTED">Rejected</option>
+                  </select>
+                </div>
+                <div class="border dark:border-gray-700 rounded-lg overflow-y-auto max-h-[240px] bg-gray-50 dark:bg-gray-900">
+                  <template x-for="topic in filteredDiscoveredTopics().slice(0, 20)" :key="topic.id">
+                    <div class="px-4 py-2 border-b border-gray-100 dark:border-gray-800">
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs font-semibold text-gray-500 dark:text-gray-400" x-text="topic.status"></span>
+                        <span class="text-xs text-gray-400 dark:text-gray-500" x-text="topic.category || 'General'"></span>
+                      </div>
+                      <div class="text-sm text-gray-800 dark:text-gray-100" x-text="topic.topic"></div>
+                    </div>
+                  </template>
+                  <div x-show="filteredDiscoveredTopics().length === 0" class="p-4 text-sm text-gray-400 dark:text-gray-500">Sin topicos para el filtro actual.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <!-- Agent run dashboard -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+      <div class="flex flex-wrap items-center gap-3">
+        <div>
+          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Research Agent Runs</h2>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Lanza busquedas por tema y observa cada agente del pipeline.</p>
+        </div>
+        <div class="flex-1"></div>
+        <button @click="runsCollapsed = !runsCollapsed"
+                class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition"
+                x-text="runsCollapsed ? 'Expand' : 'Collapse'"></button>
+        <button @click="loadResearchRuns()" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition">
+          Refresh
+        </button>
+      </div>
+    </div>
+
+    <div x-show="!runsCollapsed" class="p-6 space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div class="md:col-span-2">
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Topic</label>
+          <input x-model="runForm.topic" placeholder="meter reading EABL validation"
+                 class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Scope</label>
+          <input value="Standard KB" disabled class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Max/source</label>
+          <input type="number" min="1" max="5" x-model.number="runForm.max_results_per_source"
+                 class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        </div>
+      </div>
+
+      <div>
+        <label class="text-xs font-medium text-gray-500 dark:text-gray-400 block mb-2">Starter topics</label>
+        <div class="flex flex-wrap gap-2">
+          <template x-for="preset in topicPresets" :key="preset.topic">
+            <button @click="applyTopicPreset(preset)"
+                    class="border dark:border-gray-600 rounded-lg px-3 py-2 text-xs bg-gray-50 hover:bg-sap-50 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition"
+                    x-text="preset.label"></button>
+          </template>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <template x-for="source in researchSources.filter(s => s.usage_policy !== 'REFERENCE_ONLY' && s.base_url)" :key="source.id">
+          <label class="flex items-center gap-2 border dark:border-gray-600 rounded-lg px-3 py-2 text-xs cursor-pointer bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200">
+            <input type="checkbox" :checked="runForm.source_ids.includes(source.id)" @change="toggleRunSource(source.id)" class="text-sap-600">
+            <span x-text="source.name"></span>
+          </label>
+        </template>
+      </div>
+
+      <div class="flex flex-wrap gap-3 items-center">
+        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+          <input type="checkbox" x-model="runForm.auto_promote" class="text-sap-600">
+          <span>Promote audited candidates to KB Draft</span>
+        </label>
+        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+          <input type="checkbox" x-model="runForm.auto_index" :disabled="!runForm.auto_promote" class="text-sap-600">
+          <span>Auto-approve & index low-risk drafts</span>
+        </label>
+        <button @click="startResearchRun()" :disabled="runProcessing"
+                class="bg-green-600 hover:bg-green-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
+          Start Agents
+        </button>
+        <span x-show="runMessage" class="text-sm" :class="runMessageType === 'error' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'" x-text="runMessage"></span>
+      </div>
+
+      <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+        <div class="flex flex-wrap items-end gap-3">
+          <div>
+            <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Catalog category</label>
+            <select x-model="catalogForm.category" class="w-48 border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+              <option value="">All categories</option>
+              <template x-for="category in topicCategories" :key="category">
+                <option :value="category" x-text="category"></option>
+              </template>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Topic limit</label>
+            <input type="number" min="1" x-model.number="catalogForm.limit"
+                   class="w-28 border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+          </div>
+          <button @click="startCatalogRuns()" :disabled="runProcessing"
+                  class="bg-sap-600 hover:bg-sap-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
+            Run Full Catalog
+          </button>
+          <span class="text-xs text-gray-500 dark:text-gray-400" x-text="topicCatalog.length + ' topics available'"></span>
+        </div>
+      </div>
+    </div>
+
+    <div x-show="!runsCollapsed" class="grid grid-cols-1 md:grid-cols-3 border-t border-gray-200 dark:border-gray-700 min-h-[420px]">
+      <div class="border-r border-gray-200 dark:border-gray-700 overflow-y-auto max-h-[520px]">
+        <div class="p-3 border-b border-gray-100 dark:border-gray-700 space-y-2">
+          <input x-model="runFilterQuery" placeholder="Filter runs..."
+                 class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-xs bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+          <select x-model="runFilterStatus" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-xs">
+            <option value="ALL">All statuses</option>
+            <option value="RUNNING">Running</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="FAILED">Failed</option>
+          </select>
+        </div>
+        <template x-for="run in filteredResearchRuns()" :key="run.id">
+          <button @click="selectResearchRun(run)"
+                  :class="selectedResearchRun && selectedResearchRun.id === run.id ? 'bg-sap-50 dark:bg-sap-600/20 border-l-4 border-sap-600' : 'border-l-4 border-transparent hover:bg-gray-50 dark:hover:bg-gray-700'"
+                  class="w-full text-left px-4 py-3 border-b border-gray-100 dark:border-gray-700 transition">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-semibold px-2 py-0.5 rounded-full" :class="runStatusClass(run.status)" x-text="run.status"></span>
+              <span class="text-xs text-gray-400 dark:text-gray-500" x-text="run.promoted_count + ' drafts / ' + (run.indexed_count || 0) + ' indexed'"></span>
+            </div>
+            <div class="text-sm font-medium text-gray-800 dark:text-gray-100 mt-1" x-text="run.topic"></div>
+            <div class="text-xs text-gray-400 dark:text-gray-500 mt-1" x-text="run.fetched_count + ' fetched / ' + run.candidate_count + ' candidates'"></div>
+          </button>
+        </template>
+        <div x-show="filteredResearchRuns().length === 0" class="p-6 text-center text-sm text-gray-400 dark:text-gray-500">No hay runs para el filtro actual.</div>
+      </div>
+
+      <div class="md:col-span-2 p-6">
+        <template x-if="!selectedResearchRun">
+          <div class="h-full flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm">Lanza o selecciona un run para ver los agentes.</div>
+        </template>
+        <template x-if="selectedResearchRun">
+          <div class="space-y-5">
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+              <template x-for="agent in ['Collector', 'Normalizer', 'Auditor', 'Ingestor', 'Indexer']" :key="agent">
+                <div class="border dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-700">
+                  <div class="text-xs text-gray-500 dark:text-gray-400" x-text="agent"></div>
+                  <div class="mt-2 flex items-center gap-2">
+                    <span class="h-2.5 w-2.5 rounded-full" :class="agentDotClass(selectedResearchRun.agents[agent])"></span>
+                    <span class="text-sm font-semibold text-gray-800 dark:text-gray-100" x-text="selectedResearchRun.agents[agent]"></span>
+                  </div>
+                </div>
+              </template>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div class="border dark:border-gray-700 rounded-lg p-3">
+                <div class="text-xs text-gray-500 dark:text-gray-400">Discovered</div>
+                <div class="text-xl font-semibold text-gray-800 dark:text-gray-100" x-text="selectedResearchRun.discovered_count"></div>
+              </div>
+              <div class="border dark:border-gray-700 rounded-lg p-3">
+                <div class="text-xs text-gray-500 dark:text-gray-400">Fetched</div>
+                <div class="text-xl font-semibold text-gray-800 dark:text-gray-100" x-text="selectedResearchRun.fetched_count"></div>
+              </div>
+              <div class="border dark:border-gray-700 rounded-lg p-3">
+                <div class="text-xs text-gray-500 dark:text-gray-400">Candidates</div>
+                <div class="text-xl font-semibold text-gray-800 dark:text-gray-100" x-text="selectedResearchRun.candidate_count"></div>
+              </div>
+              <div class="border dark:border-gray-700 rounded-lg p-3">
+                <div class="text-xs text-gray-500 dark:text-gray-400">KB Drafts</div>
+                <div class="text-xl font-semibold text-gray-800 dark:text-gray-100" x-text="selectedResearchRun.promoted_count"></div>
+              </div>
+              <div class="border dark:border-gray-700 rounded-lg p-3">
+                <div class="text-xs text-gray-500 dark:text-gray-400">Indexed</div>
+                <div class="text-xl font-semibold text-gray-800 dark:text-gray-100" x-text="selectedResearchRun.indexed_count || 0"></div>
+              </div>
+            </div>
+            <div>
+              <div class="flex items-center gap-2 mb-2">
+                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">Agent Timeline</h3>
+                <button @click="loadResearchRunEvents(selectedResearchRun.id)" class="text-xs text-sap-600 dark:text-sap-400 hover:underline">Refresh</button>
+              </div>
+              <div class="border dark:border-gray-700 rounded-lg overflow-y-auto max-h-[260px] bg-gray-50 dark:bg-gray-900">
+                <template x-for="event in runEvents" :key="event.id">
+                  <div class="px-4 py-2 border-b border-gray-100 dark:border-gray-800 text-sm">
+                    <span class="text-xs font-semibold" :class="eventLevelClass(event.level)" x-text="event.level"></span>
+                    <span class="text-xs text-gray-400 dark:text-gray-500 ml-2" x-text="event.agent"></span>
+                    <span class="text-gray-700 dark:text-gray-200 ml-2" x-text="event.message"></span>
+                  </div>
+                </template>
+                <div x-show="runEvents.length === 0" class="p-4 text-sm text-gray-400 dark:text-gray-500">Sin eventos.</div>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controlled research workflow -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+      <div class="flex flex-wrap items-center gap-3">
+        <div>
+          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">SAP IS-U Research Candidates</h2>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Convierte fuentes externas en candidatos auditados antes de crear borradores KB.</p>
+        </div>
+        <div class="flex-1"></div>
+        <button @click="candidatesCollapsed = !candidatesCollapsed"
+                class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition"
+                x-text="candidatesCollapsed ? 'Expand' : 'Collapse'"></button>
+        <button @click="loadResearchCandidates()" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition">
+          Refresh
+        </button>
+      </div>
+    </div>
+
+    <div x-show="!candidatesCollapsed" class="p-6 space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Source</label>
+          <select x-model="researchForm.source_id" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+            <template x-for="source in researchSources" :key="source.id">
+              <option :value="source.id" x-text="source.priority + '. ' + source.name"></option>
+            </template>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Scope</label>
+          <select x-model="researchForm.scope" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+            <option value="standard">Standard</option>
+            <option value="client">Client</option>
+          </select>
+        </div>
+        <div class="md:col-span-2">
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400">URL</label>
+          <input x-model="researchForm.url" placeholder="https://..."
+                 class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        </div>
+      </div>
+      <div>
+        <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Title</label>
+        <input x-model="researchForm.title" placeholder="EABL meter reading results table"
+               class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+      </div>
+      <div>
+        <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Excerpt or notes</label>
+        <textarea x-model="researchForm.raw_excerpt" rows="5"
+                  placeholder="Paste a short, permitted excerpt or your own notes from the source..."
+                  class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-mono bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
+      </div>
+      <div class="flex flex-wrap gap-3 items-center">
+        <button @click="createResearchCandidate()" :disabled="researchProcessing"
+                class="bg-sap-600 hover:bg-sap-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
+          Create Candidate
+        </button>
+        <button @click="collectResearchUrl()" :disabled="researchProcessing || !researchForm.url"
+                class="bg-gray-800 hover:bg-gray-900 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
+          Collect URL
+        </button>
+        <span x-show="researchMessage" class="text-sm" :class="researchMessageType === 'error' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'" x-text="researchMessage"></span>
+      </div>
+    </div>
+
+    <div x-show="!candidatesCollapsed" class="grid grid-cols-1 md:grid-cols-3 border-t border-gray-200 dark:border-gray-700 min-h-[360px]">
+      <div class="border-r border-gray-200 dark:border-gray-700 overflow-y-auto max-h-[460px]">
+        <div class="p-3 border-b border-gray-100 dark:border-gray-700 space-y-2">
+          <input x-model="candidateFilterQuery" placeholder="Filter candidates..."
+                 class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-xs bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+          <div class="grid grid-cols-2 gap-2">
+            <select x-model="candidateFilterAudit" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-xs">
+              <option value="ALL">All audits</option>
+              <option value="PASSED">Passed</option>
+              <option value="NEEDS_REVIEW">Needs review</option>
+              <option value="REJECTED">Rejected</option>
+            </select>
+            <select x-model="candidateFilterStatus" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-xs">
+              <option value="ALL">All statuses</option>
+              <option value="AUDITED">Audited</option>
+              <option value="PROMOTED">Promoted</option>
+              <option value="REJECTED">Rejected</option>
+            </select>
+          </div>
+        </div>
+        <template x-for="candidate in filteredResearchCandidates()" :key="candidate.id">
+          <button @click="selectResearchCandidate(candidate)"
+                  :class="selectedResearchCandidate && selectedResearchCandidate.id === candidate.id ? 'bg-sap-50 dark:bg-sap-600/20 border-l-4 border-sap-600' : 'border-l-4 border-transparent hover:bg-gray-50 dark:hover:bg-gray-700'"
+                  class="w-full text-left px-4 py-3 border-b border-gray-100 dark:border-gray-700 transition">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                    :class="{
+                      'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300': candidate.audit_status === 'PASSED',
+                      'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300': candidate.audit_status === 'NEEDS_REVIEW',
+                      'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300': candidate.audit_status === 'REJECTED',
+                    }" x-text="candidate.audit_status"></span>
+              <span class="text-xs text-gray-400 dark:text-gray-500" x-text="candidate.kb_type"></span>
+            </div>
+            <div class="text-sm font-medium text-gray-800 dark:text-gray-100 mt-1" x-text="candidate.title"></div>
+            <div class="text-xs text-gray-400 dark:text-gray-500 mt-1" x-text="candidate.source_name + ' / ' + candidate.status"></div>
+          </button>
+        </template>
+        <div x-show="filteredResearchCandidates().length === 0" class="p-6 text-center text-sm text-gray-400 dark:text-gray-500">No hay candidatos para el filtro actual.</div>
+      </div>
+
+      <div class="md:col-span-2 p-6">
+        <template x-if="!selectedResearchCandidate">
+          <div class="h-full flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm">Selecciona un candidato para revisar o promocionar.</div>
+        </template>
+        <template x-if="selectedResearchCandidate">
+          <div class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div>
+                <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Status</label>
+                <input :value="selectedResearchCandidate.status" disabled class="w-full border dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-300">
+              </div>
+              <div>
+                <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Risk</label>
+                <input :value="selectedResearchCandidate.copyright_risk" disabled class="w-full border dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-300">
+              </div>
+              <div>
+                <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Confidence</label>
+                <input :value="selectedResearchCandidate.confidence_score" disabled class="w-full border dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-300">
+              </div>
+              <div>
+                <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Scope</label>
+                <input :value="selectedResearchCandidate.client_scope" disabled class="w-full border dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-300">
+              </div>
+            </div>
+            <div>
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Audit notes</label>
+              <p class="text-sm text-gray-600 dark:text-gray-300" x-text="selectedResearchCandidate.audit_notes || 'No audit notes.'"></p>
+            </div>
+            <div>
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Generated KB Draft Content</label>
+              <textarea x-model="selectedResearchCandidate.content_markdown" rows="10" readonly
+                        class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-mono bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
+            </div>
+            <div class="flex flex-wrap gap-3 items-center">
+              <button @click="promoteResearchCandidate()" :disabled="researchProcessing || selectedResearchCandidate.status === 'PROMOTED' || selectedResearchCandidate.copyright_risk === 'HIGH'"
+                      class="bg-green-600 hover:bg-green-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
+                Promote to KB Draft
+              </button>
+              <button @click="rejectResearchCandidate()" :disabled="researchProcessing || selectedResearchCandidate.status === 'REJECTED'"
+                      class="bg-red-600 hover:bg-red-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
+                Reject Candidate
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
   <!-- Draft review integrated into ingestion -->
   <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
     <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
       <div class="flex flex-wrap items-center gap-3">
         <div>
-          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Borradores KB pendientes</h2>
-          <p class="text-sm text-gray-500 dark:text-gray-400">Revisa y aprueba el conocimiento antes de que el Chat lo use.</p>
+          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Revisión KB</h2>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Revisa, aprueba o rechaza conocimiento del scope seleccionado.</p>
         </div>
         <div class="flex-1"></div>
+        <button @click="reviewCollapsed = !reviewCollapsed"
+                class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition"
+                x-text="reviewCollapsed ? 'Expand' : 'Collapse'"></button>
         <select x-model="reviewScope" @change="loadReviewItems()" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
           <option value="standard">Standard</option>
           <option value="client">Client</option>
@@ -101,12 +629,20 @@
         <button @click="loadReviewItems()" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition">
           Refresh
         </button>
+        <button x-show="reviewStatusFilter === 'DRAFT'" @click="approveAllReviewDrafts()" :disabled="reviewProcessing || reviewItems.length === 0"
+                class="bg-green-600 hover:bg-green-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+          Approve & Index All
+        </button>
       </div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-3 min-h-[420px]">
+    <div x-show="!reviewCollapsed" class="grid grid-cols-1 md:grid-cols-3 min-h-[420px]">
       <div class="border-r border-gray-200 dark:border-gray-700 overflow-y-auto max-h-[520px]">
-        <template x-for="item in reviewItems" :key="item.kb_id">
+        <div class="p-3 border-b border-gray-100 dark:border-gray-700">
+          <input x-model="reviewFilterQuery" placeholder="Filter KB items..."
+                 class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-xs bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        </div>
+        <template x-for="item in filteredReviewItems()" :key="item.kb_id">
           <button @click="selectReviewItem(item)"
                   :class="selectedReviewItem && selectedReviewItem.kb_id === item.kb_id ? 'bg-sap-50 dark:bg-sap-600/20 border-l-4 border-sap-600' : 'border-l-4 border-transparent hover:bg-gray-50 dark:hover:bg-gray-700'"
                   class="w-full text-left px-4 py-3 border-b border-gray-100 dark:border-gray-700 transition">
@@ -123,7 +659,7 @@
             <div class="text-xs text-gray-400 dark:text-gray-500 mt-1">v<span x-text="item.version"></span></div>
           </button>
         </template>
-        <div x-show="reviewItems.length === 0" class="p-6 text-center text-sm text-gray-400 dark:text-gray-500">No hay items para revisar.</div>
+        <div x-show="filteredReviewItems().length === 0" class="p-6 text-center text-sm text-gray-400 dark:text-gray-500">No hay items para el filtro actual.</div>
       </div>
 
       <div class="md:col-span-2 p-6">
@@ -162,7 +698,7 @@
                         class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-mono bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
             </div>
             <div class="flex flex-wrap gap-3 items-center">
-              <button @click="approveReviewItem()" :disabled="reviewProcessing"
+              <button x-show="selectedReviewItem.status === 'DRAFT'" @click="approveReviewItem()" :disabled="reviewProcessing"
                       class="bg-green-600 hover:bg-green-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition">
                 Approve & Index
               </button>
@@ -201,6 +737,96 @@ function ingestApp() {
     reviewProcessing: false,
     reviewMessage: '',
     reviewMessageType: 'success',
+    researchSources: [],
+    researchCandidates: [],
+    selectedResearchCandidate: null,
+    researchProcessing: false,
+    researchMessage: '',
+    researchMessageType: 'success',
+    researchRuns: [],
+    selectedResearchRun: null,
+    runEvents: [],
+    topicCatalog: [],
+    topicCategories: [],
+    runProcessing: false,
+    runMessage: '',
+    runMessageType: 'success',
+    runPoller: null,
+    crawlerCollapsed: false,
+    runsCollapsed: false,
+    candidatesCollapsed: false,
+    reviewCollapsed: false,
+    crawlRuns: [],
+    selectedCrawlRun: null,
+    crawlEvents: [],
+    discoveredTopics: [],
+    crawlFilterQuery: '',
+    crawlFilterStatus: 'ALL',
+    topicFilterQuery: '',
+    topicFilterStatus: 'ALL',
+    crawlProcessing: false,
+    crawlMessage: '',
+    crawlMessageType: 'success',
+    crawlSeedQueriesStr: 'SAP IS-U utilities; SAP IS-U master data contract account; SAP IS-U meter reading billing device management; SAP FI-CA contract account open items; SAP IS-U UTILMD MSCONS APERAK EDIFACT; SAP S/4HANA Utilities meter to cash',
+    topicPresets: [
+      {label: 'FI-CA FKKVKP', topic: 'SAP IS-U business partner contract account FKKVKP', source_ids: ['sap-datasheet', 'leanx', 'tcodesearch', 'sap-help']},
+      {label: 'Meter Reading EABL', topic: 'SAP IS-U meter reading EABL EABLG', source_ids: ['sap-datasheet', 'leanx', 'tcodesearch', 'sap-help']},
+      {label: 'Device EGERH', topic: 'SAP IS-U device installation removal EGERH EASTL', source_ids: ['sap-datasheet', 'leanx', 'tcodesearch', 'sap-help']},
+      {label: 'Billing ERCH', topic: 'SAP IS-U billing document ERCH ERDK', source_ids: ['sap-datasheet', 'leanx', 'tcodesearch', 'sap-help']},
+      {label: 'UTILMD IDoc', topic: 'SAP IS-U UTILMD IDoc EDIDS APERAK', source_ids: ['bdew-edi-energy', 'sap-datasheet', 'tcodesearch', 'sap-help']},
+    ],
+    runForm: {
+      topic: '',
+      scope: 'standard',
+      source_ids: [],
+      max_results_per_source: 2,
+      auto_promote: true,
+      auto_index: true,
+    },
+    catalogForm: {
+      category: '',
+      limit: null,
+    },
+    crawlForm: {
+      scope: 'standard',
+      source_ids: [],
+      max_pages_per_source: 2,
+      max_topics: 40,
+      auto_queue_runs: true,
+      auto_promote: true,
+      auto_index: true,
+    },
+    researchForm: {
+      source_id: 'sap-help',
+      scope: 'standard',
+      url: '',
+      title: '',
+      raw_excerpt: '',
+    },
+    runFilterQuery: '',
+    runFilterStatus: 'ALL',
+    candidateFilterQuery: '',
+    candidateFilterAudit: 'ALL',
+    candidateFilterStatus: 'ALL',
+    reviewFilterQuery: '',
+
+    async init() {
+      await this.loadResearchSources();
+      await this.loadTopicCatalog();
+      await this.loadCrawlRuns();
+      await this.loadDiscoveredTopics();
+      await this.loadResearchRuns();
+      await this.loadResearchCandidates();
+      await this.loadReviewItems();
+      this.runPoller = setInterval(async () => {
+        if (this.selectedCrawlRun && ['QUEUED', 'RUNNING'].includes(this.selectedCrawlRun.status)) {
+          await this.refreshSelectedCrawl();
+        }
+        if (this.selectedResearchRun && ['QUEUED', 'RUNNING'].includes(this.selectedResearchRun.status)) {
+          await this.refreshSelectedRun();
+        }
+      }, 3000);
+    },
 
     handleFile(e) { this.file = e.target.files[0]; this.fileName = this.file?.name || ''; },
     handleDrop(e) {
@@ -271,6 +897,51 @@ function ingestApp() {
       this.selectedReviewItem = null;
     },
 
+    textMatches(value, query) {
+      if (!query) return true;
+      return String(value || '').toLowerCase().includes(query.toLowerCase());
+    },
+
+    filteredCrawlRuns() {
+      return this.crawlRuns.filter(crawl => {
+        const statusOk = this.crawlFilterStatus === 'ALL' || crawl.status === this.crawlFilterStatus;
+        const textOk = this.textMatches((crawl.seed_queries || []).join(' ') + ' ' + crawl.status, this.crawlFilterQuery);
+        return statusOk && textOk;
+      });
+    },
+
+    filteredDiscoveredTopics() {
+      return this.discoveredTopics.filter(topic => {
+        const statusOk = this.topicFilterStatus === 'ALL' || topic.status === this.topicFilterStatus;
+        const haystack = [topic.topic, topic.category, topic.source_name, (topic.objects || []).join(' ')].join(' ');
+        return statusOk && this.textMatches(haystack, this.topicFilterQuery);
+      });
+    },
+
+    filteredResearchRuns() {
+      return this.researchRuns.filter(run => {
+        const statusOk = this.runFilterStatus === 'ALL' || run.status === this.runFilterStatus;
+        const haystack = [run.topic, run.status, run.promoted_count + ' drafts', run.indexed_count + ' indexed'].join(' ');
+        return statusOk && this.textMatches(haystack, this.runFilterQuery);
+      });
+    },
+
+    filteredResearchCandidates() {
+      return this.researchCandidates.filter(candidate => {
+        const auditOk = this.candidateFilterAudit === 'ALL' || candidate.audit_status === this.candidateFilterAudit;
+        const statusOk = this.candidateFilterStatus === 'ALL' || candidate.status === this.candidateFilterStatus;
+        const haystack = [candidate.title, candidate.kb_type, candidate.source_name, candidate.status, candidate.audit_status, (candidate.sap_objects || []).join(' ')].join(' ');
+        return auditOk && statusOk && this.textMatches(haystack, this.candidateFilterQuery);
+      });
+    },
+
+    filteredReviewItems() {
+      return this.reviewItems.filter(item => {
+        const haystack = [item.title, item.type, item.status, (item.tags || []).join(' '), (item.sap_objects || []).join(' ')].join(' ');
+        return this.textMatches(haystack, this.reviewFilterQuery);
+      });
+    },
+
     selectReviewItem(item) {
       this.selectedReviewItem = {...item};
       this.reviewTagsStr = (item.tags || []).join(', ');
@@ -312,6 +983,33 @@ function ingestApp() {
       await this.loadReviewItems();
     },
 
+    async approveAllReviewDrafts() {
+      if (this.reviewStatusFilter !== 'DRAFT' || this.reviewItems.length === 0) return;
+      this.reviewProcessing = true;
+      this.reviewMessage = 'Approving and indexing drafts...';
+      this.reviewMessageType = 'success';
+      const resp = await fetch('/api/review/items/bulk-approve', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({scope: this.reviewScope}),
+      });
+      const data = await resp.json().catch(() => ({}));
+      this.reviewProcessing = false;
+      if (!resp.ok) {
+        this.reviewMessage = data.error || 'Bulk approve failed.';
+        this.reviewMessageType = 'error';
+        return;
+      }
+      if (data.failed_count) {
+        this.reviewMessage = 'Indexed ' + data.indexed_count + ' draft(s); ' + data.failed_count + ' failed.';
+        this.reviewMessageType = 'error';
+      } else {
+        this.reviewMessage = 'Approved and indexed ' + data.indexed_count + ' draft(s).';
+        this.reviewMessageType = 'success';
+      }
+      await this.loadReviewItems();
+    },
+
     async rejectReviewItem() {
       if (!this.selectedReviewItem) return;
       this.reviewProcessing = true;
@@ -330,6 +1028,337 @@ function ingestApp() {
       this.reviewMessage = 'Rejected.';
       this.reviewMessageType = 'success';
       await this.loadReviewItems();
+    },
+
+    async loadResearchSources() {
+      const resp = await fetch('/api/research/sources');
+      this.researchSources = await resp.json();
+      if (this.researchSources.length && !this.researchSources.find(s => s.id === this.researchForm.source_id)) {
+        this.researchForm.source_id = this.researchSources[0].id;
+      }
+      if (this.runForm.source_ids.length === 0) {
+        const defaults = ['sap-datasheet', 'leanx', 'tcodesearch', 'sap-help'];
+        this.runForm.source_ids = defaults.filter(id => this.researchSources.find(s => s.id === id));
+      }
+      if (this.crawlForm.source_ids.length === 0) {
+        const crawlerDefaults = ['sap-help', 'sap-learning', 'sap-datasheet', 'leanx', 'tcodesearch', 'bdew-edi-energy'];
+        this.crawlForm.source_ids = crawlerDefaults.filter(id => this.researchSources.find(s => s.id === id));
+      }
+    },
+
+    applyTopicPreset(preset) {
+      this.runForm.topic = preset.topic;
+      this.runForm.source_ids = preset.source_ids.filter(id => this.researchSources.find(s => s.id === id));
+      this.runForm.max_results_per_source = 1;
+      this.runMessage = '';
+    },
+
+    async loadCrawlRuns() {
+      const resp = await fetch('/api/research/crawls?limit=20');
+      this.crawlRuns = await resp.json();
+      if (this.selectedCrawlRun) {
+        this.selectedCrawlRun = this.crawlRuns.find(c => c.id === this.selectedCrawlRun.id) || this.selectedCrawlRun;
+      }
+    },
+
+    async selectCrawlRun(crawl) {
+      this.selectedCrawlRun = {...crawl};
+      await this.loadCrawlRunEvents(crawl.id);
+      await this.loadDiscoveredTopics();
+    },
+
+    async refreshSelectedCrawl() {
+      if (!this.selectedCrawlRun) return;
+      const resp = await fetch('/api/research/crawls/' + this.selectedCrawlRun.id);
+      if (resp.ok) {
+        this.selectedCrawlRun = await resp.json();
+        await this.loadCrawlRunEvents(this.selectedCrawlRun.id);
+        await this.loadCrawlRuns();
+        await this.loadDiscoveredTopics();
+        if (this.selectedCrawlRun.status === 'COMPLETED') {
+          await this.loadResearchRuns();
+          await this.loadResearchCandidates();
+          await this.loadReviewItems();
+        }
+      }
+    },
+
+    async loadCrawlRunEvents(crawlId) {
+      const resp = await fetch('/api/research/crawls/' + crawlId + '/events');
+      this.crawlEvents = await resp.json();
+    },
+
+    async loadDiscoveredTopics() {
+      const resp = await fetch('/api/research/discovered-topics?limit=100');
+      this.discoveredTopics = await resp.json();
+    },
+
+    toggleCrawlSource(sourceId) {
+      if (this.crawlForm.source_ids.includes(sourceId)) {
+        this.crawlForm.source_ids = this.crawlForm.source_ids.filter(id => id !== sourceId);
+      } else {
+        this.crawlForm.source_ids.push(sourceId);
+      }
+    },
+
+    async startAutonomousCrawl() {
+      const seed_queries = this.crawlSeedQueriesStr.split(';').map(s => s.trim()).filter(Boolean);
+      if (seed_queries.length === 0) {
+        this.crawlMessage = 'Seed query is required.';
+        this.crawlMessageType = 'error';
+        return;
+      }
+      this.crawlProcessing = true;
+      this.crawlMessage = '';
+      const body = {
+        ...this.crawlForm,
+        seed_queries,
+      };
+      const resp = await fetch('/api/research/crawls', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body),
+      });
+      const data = await resp.json();
+      this.crawlProcessing = false;
+      if (!resp.ok) {
+        this.crawlMessage = data.error || 'Crawler start failed.';
+        this.crawlMessageType = 'error';
+        return;
+      }
+      this.crawlMessage = 'Crawler queued.';
+      this.crawlMessageType = 'success';
+      this.selectedCrawlRun = data;
+      await this.loadCrawlRuns();
+      await this.loadCrawlRunEvents(data.id);
+      await this.refreshSelectedCrawl();
+    },
+
+    async loadResearchRuns() {
+      const resp = await fetch('/api/research/runs?limit=20');
+      this.researchRuns = await resp.json();
+      if (this.selectedResearchRun) {
+        this.selectedResearchRun = this.researchRuns.find(r => r.id === this.selectedResearchRun.id) || this.selectedResearchRun;
+      }
+    },
+
+    async loadTopicCatalog() {
+      const resp = await fetch('/api/research/topic-catalog');
+      this.topicCatalog = await resp.json();
+      this.topicCategories = [...new Set(this.topicCatalog.map(t => t.category))].sort();
+    },
+
+    async selectResearchRun(run) {
+      this.selectedResearchRun = {...run};
+      await this.loadResearchRunEvents(run.id);
+    },
+
+    async refreshSelectedRun() {
+      if (!this.selectedResearchRun) return;
+      const resp = await fetch('/api/research/runs/' + this.selectedResearchRun.id);
+      if (resp.ok) {
+        this.selectedResearchRun = await resp.json();
+        await this.loadResearchRunEvents(this.selectedResearchRun.id);
+        await this.loadResearchRuns();
+        if (this.selectedResearchRun.status === 'COMPLETED') {
+          await this.loadResearchCandidates();
+          await this.loadReviewItems();
+        }
+      }
+    },
+
+    async loadResearchRunEvents(runId) {
+      const resp = await fetch('/api/research/runs/' + runId + '/events');
+      this.runEvents = await resp.json();
+    },
+
+    toggleRunSource(sourceId) {
+      if (this.runForm.source_ids.includes(sourceId)) {
+        this.runForm.source_ids = this.runForm.source_ids.filter(id => id !== sourceId);
+      } else {
+        this.runForm.source_ids.push(sourceId);
+      }
+    },
+
+    async startResearchRun() {
+      if (!this.runForm.topic.trim()) {
+        this.runMessage = 'Topic is required.';
+        this.runMessageType = 'error';
+        return;
+      }
+      this.runProcessing = true;
+      this.runMessage = '';
+      const resp = await fetch('/api/research/runs', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(this.runForm),
+      });
+      const data = await resp.json();
+      this.runProcessing = false;
+      if (!resp.ok) {
+        this.runMessage = data.error || 'Run start failed.';
+        this.runMessageType = 'error';
+        return;
+      }
+      this.runMessage = 'Run queued.';
+      this.runMessageType = 'success';
+      this.selectedResearchRun = data;
+      await this.loadResearchRuns();
+      await this.loadResearchRunEvents(data.id);
+      await this.refreshSelectedRun();
+    },
+
+    async startCatalogRuns() {
+      this.runProcessing = true;
+      this.runMessage = '';
+      const body = {
+        scope: this.runForm.scope,
+        category: this.catalogForm.category || null,
+        limit: this.catalogForm.limit || null,
+        max_results_per_source: this.runForm.max_results_per_source,
+        auto_promote: this.runForm.auto_promote,
+        auto_index: this.runForm.auto_index,
+      };
+      const resp = await fetch('/api/research/runs/catalog', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body),
+      });
+      const data = await resp.json();
+      this.runProcessing = false;
+      if (!resp.ok) {
+        this.runMessage = data.error || 'Catalog run failed.';
+        this.runMessageType = 'error';
+        return;
+      }
+      this.runMessage = 'Catalog queued: ' + data.queued + ' topic runs.';
+      this.runMessageType = 'success';
+      await this.loadResearchRuns();
+      if (data.runs && data.runs.length) {
+        await this.selectResearchRun(data.runs[0]);
+      }
+    },
+
+    async loadResearchCandidates() {
+      const resp = await fetch('/api/research/candidates?limit=50');
+      this.researchCandidates = await resp.json();
+      if (this.selectedResearchCandidate) {
+        this.selectedResearchCandidate = this.researchCandidates.find(c => c.id === this.selectedResearchCandidate.id) || null;
+      }
+    },
+
+    selectResearchCandidate(candidate) {
+      this.selectedResearchCandidate = {...candidate};
+      this.researchMessage = '';
+    },
+
+    async createResearchCandidate() {
+      this.researchProcessing = true;
+      this.researchMessage = '';
+      const resp = await fetch('/api/research/candidates', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(this.researchForm),
+      });
+      const data = await resp.json();
+      this.researchProcessing = false;
+      if (!resp.ok) {
+        this.researchMessage = data.error || 'Candidate creation failed.';
+        this.researchMessageType = 'error';
+        return;
+      }
+      this.researchMessage = data.is_new ? 'Candidate created.' : 'Duplicate candidate already exists.';
+      this.researchMessageType = 'success';
+      this.selectedResearchCandidate = data;
+      await this.loadResearchCandidates();
+    },
+
+    async collectResearchUrl() {
+      this.researchProcessing = true;
+      this.researchMessage = 'Collecting URL...';
+      this.researchMessageType = 'success';
+      const resp = await fetch('/api/research/collect-url', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(this.researchForm),
+      });
+      const data = await resp.json();
+      this.researchProcessing = false;
+      if (!resp.ok) {
+        this.researchMessage = data.error || 'URL collection failed.';
+        this.researchMessageType = 'error';
+        return;
+      }
+      this.researchMessage = data.is_new ? 'URL collected as candidate.' : 'Duplicate candidate already exists.';
+      this.researchMessageType = 'success';
+      this.selectedResearchCandidate = data;
+      await this.loadResearchCandidates();
+    },
+
+    async promoteResearchCandidate() {
+      if (!this.selectedResearchCandidate) return;
+      this.researchProcessing = true;
+      const resp = await fetch('/api/research/candidates/' + this.selectedResearchCandidate.id + '/promote-to-kb-draft', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({scope: this.selectedResearchCandidate.client_scope}),
+      });
+      const data = await resp.json();
+      this.researchProcessing = false;
+      if (!resp.ok) {
+        this.researchMessage = data.error || 'Promote failed.';
+        this.researchMessageType = 'error';
+        return;
+      }
+      this.researchMessage = 'Promoted to KB Draft: ' + data.kb_item.title;
+      this.researchMessageType = 'success';
+      this.reviewScope = data.candidate.client_scope;
+      await this.loadResearchCandidates();
+      await this.loadReviewItems();
+    },
+
+    async rejectResearchCandidate() {
+      if (!this.selectedResearchCandidate) return;
+      this.researchProcessing = true;
+      const resp = await fetch('/api/research/candidates/' + this.selectedResearchCandidate.id + '/reject', {method: 'POST'});
+      const data = await resp.json().catch(() => ({}));
+      this.researchProcessing = false;
+      if (!resp.ok) {
+        this.researchMessage = data.error || 'Reject failed.';
+        this.researchMessageType = 'error';
+        return;
+      }
+      this.researchMessage = 'Candidate rejected.';
+      this.researchMessageType = 'success';
+      await this.loadResearchCandidates();
+    },
+
+    runStatusClass(status) {
+      return {
+        'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300': ['QUEUED', 'RUNNING'].includes(status),
+        'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300': status === 'COMPLETED',
+        'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300': status === 'FAILED',
+        'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300': ['CANCELLED'].includes(status),
+      };
+    },
+
+    agentDotClass(status) {
+      return {
+        'bg-gray-400': status === 'PENDING',
+        'bg-blue-500 animate-pulse': status === 'RUNNING',
+        'bg-green-500': status === 'COMPLETED',
+        'bg-red-500': status === 'FAILED',
+        'bg-yellow-500': status === 'SKIPPED',
+      };
+    },
+
+    eventLevelClass(level) {
+      return {
+        'text-blue-600 dark:text-blue-400': level === 'INFO',
+        'text-yellow-600 dark:text-yellow-400': level === 'WARNING',
+        'text-red-600 dark:text-red-400': level === 'ERROR',
+        'text-green-600 dark:text-green-400': level === 'SUCCESS',
+      };
     },
   }
 }

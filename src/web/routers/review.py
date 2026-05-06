@@ -40,6 +40,17 @@ def _item_to_dict(item):
     }
 
 
+def _format_indexing_error(error: Exception) -> str:
+    from src.shared.errors import format_openai_error, format_qdrant_error
+
+    try:
+        if "qdrant" in type(error).__module__.lower():
+            return format_qdrant_error(error)
+        return format_openai_error(error)
+    except Exception:
+        return str(error)
+
+
 @router.get("/review")
 async def review_page(request: Request):
     ctx = get_template_context(request)
@@ -76,7 +87,6 @@ async def get_item(kb_id: str, request: Request, scope: str = "standard"):
 @router.post("/api/review/items/{kb_id}/approve")
 async def approve_item(kb_id: str, request: Request):
     from src.assistant.storage.models import KBItemStatus
-    from src.shared.errors import format_openai_error, format_qdrant_error
 
     body = await request.json()
     scope = body.get("scope", "standard")
@@ -100,27 +110,61 @@ async def approve_item(kb_id: str, request: Request):
     indexing_error = None
     try:
         api_key = get_openai_api_key(request)
-        from src.assistant.retrieval.embedding_service import EmbeddingService
-        from src.assistant.retrieval.qdrant_service import QdrantService
+        from src.assistant.retrieval.kb_indexer import index_approved_kb_item
 
-        embed_svc = EmbeddingService(api_key=api_key)
-        embedding = embed_svc.embed(f"{updated.title}\n\n{updated.content_markdown}")
-        qdrant_svc = QdrantService(state.qdrant_url)
-        qdrant_svc.upsert_kb_item(updated, embedding)
+        index_approved_kb_item(updated, api_key=api_key, qdrant_url=state.qdrant_url)
     except Exception as e:
         log.exception("Approve indexing error")
-        try:
-            if "qdrant" in type(e).__module__.lower():
-                indexing_error = format_qdrant_error(e)
-            else:
-                indexing_error = format_openai_error(e)
-        except Exception:
-            indexing_error = str(e)
+        indexing_error = _format_indexing_error(e)
 
     result = _item_to_dict(updated)
     if indexing_error:
         result["indexing_warning"] = indexing_error
     return result
+
+
+@router.post("/api/review/items/bulk-approve")
+async def bulk_approve_items(request: Request):
+    from src.assistant.storage.models import KBItemStatus
+    from src.assistant.retrieval.kb_indexer import index_approved_kb_item
+
+    body = await request.json()
+    scope = body.get("scope", "standard")
+    state = get_state(request)
+    repo = _get_kb_repo(state, scope)
+    if not repo:
+        return JSONResponse({"error": "No client selected."}, status_code=400)
+
+    client_code = state.active_client_code if scope == "client" else None
+    drafts = repo.list_by_scope(scope, client_code=client_code, status=KBItemStatus.DRAFT)
+    api_key = get_openai_api_key(request)
+
+    approved = []
+    errors = []
+    for draft in drafts:
+        updated = repo.update_status(draft.kb_id, KBItemStatus.APPROVED)
+        try:
+            index_approved_kb_item(updated, api_key=api_key, qdrant_url=state.qdrant_url)
+            approved.append(_item_to_dict(updated))
+        except Exception as e:
+            log.exception("Bulk approve indexing error for %s", draft.kb_id)
+            repo.update_status(draft.kb_id, KBItemStatus.DRAFT)
+            errors.append({
+                "kb_id": draft.kb_id,
+                "title": draft.title,
+                "error": _format_indexing_error(e),
+            })
+
+    return {
+        "scope": scope,
+        "client_code": client_code,
+        "requested_count": len(drafts),
+        "approved_count": len(approved),
+        "indexed_count": len(approved),
+        "failed_count": len(errors),
+        "items": approved,
+        "errors": errors,
+    }
 
 
 @router.post("/api/review/items/{kb_id}/reject")
@@ -134,6 +178,20 @@ async def reject_item(kb_id: str, request: Request):
     if not repo:
         return JSONResponse({"error": "No client selected."}, status_code=400)
 
+    existing = repo.get_by_id(kb_id)
+    deletion_warning = None
+    if existing and existing.status == KBItemStatus.APPROVED.value:
+        try:
+            from src.assistant.retrieval.qdrant_service import QdrantService
+
+            QdrantService(state.qdrant_url).delete_kb_item(existing)
+        except Exception as e:
+            log.exception("Reject vector deletion error")
+            deletion_warning = _format_indexing_error(e)
+
     repo.update_status(kb_id, KBItemStatus.REJECTED)
     item = repo.get_by_id(kb_id)
-    return _item_to_dict(item)
+    result = _item_to_dict(item)
+    if deletion_warning:
+        result["deletion_warning"] = deletion_warning
+    return result
