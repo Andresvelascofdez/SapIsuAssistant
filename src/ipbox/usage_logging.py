@@ -45,6 +45,12 @@ class UsageRecord:
     output_type: str = "TECHNICAL_ANALYSIS"
     output_used: str = "NO"
     used_for_client_delivery: str = "NO"
+    human_reviewed: str = "NO"
+    verification_status: str = "NOT_RECORDED"
+    software_features_used: str = ""
+    retrieved_kb_item_ids: str = ""
+    retrieved_incident_ids: str = ""
+    output_reference: str = ""
     actual_time_minutes: int = 0
     estimated_time_without_tool_minutes: int = 0
     estimated_time_saved_minutes: int = 0
@@ -127,6 +133,8 @@ def validate_usage_record(record: UsageRecord) -> None:
         raise ValueError("Invalid output_used")
     if record.used_for_client_delivery not in YES_NO:
         raise ValueError("Invalid used_for_client_delivery")
+    if record.human_reviewed not in YES_NO:
+        raise ValueError("Invalid human_reviewed")
     if not 0 <= record.software_contribution_factor <= 1:
         raise ValueError("software_contribution_factor must be between 0 and 1")
     if record.actual_time_minutes < 0 or record.estimated_time_without_tool_minutes < 0:

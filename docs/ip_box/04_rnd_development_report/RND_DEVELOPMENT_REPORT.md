@@ -20,7 +20,7 @@ This document describes software development challenges. It does not claim scien
 
 ## Challenge 3: AI + Knowledge Base + Incident Retrieval Workflow
 
-- Problem: generic AI ancliars are not enough for SAP IS-U consulting.
+- Problem: external model ancliars without application-controlled SAP IS-U context are not enough for SAP IS-U consulting.
 - Technical uncertainty: how to combine curated KB, incident evidence and AI-generated output.
 - Solution: RAG chat, KB review, incident KB draft generation and source audit panel.
 - Evidence: `src/assistant/chat/chat_service.py`, `src/web/routers/chat.py`, `src/web/routers/incidents.py`.

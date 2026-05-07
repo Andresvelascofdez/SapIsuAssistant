@@ -38,6 +38,11 @@ def test_usage_log_save_and_read_preserves_namespace_fields(tmp_path):
         namespace_applied="CLIENT_A",
         output_used="YES",
         used_for_client_delivery="YES",
+        human_reviewed="YES",
+        verification_status="CONSULTANT_VERIFIED",
+        software_features_used="CHAT_RAG;KB_RETRIEVAL",
+        retrieved_kb_item_ids="KB-001;KB-002",
+        output_reference="JIRA-123 comment 4",
         actual_time_minutes=45,
         estimated_time_without_tool_minutes=90,
         estimated_time_saved_minutes=45,
@@ -52,6 +57,9 @@ def test_usage_log_save_and_read_preserves_namespace_fields(tmp_path):
     assert len(events) == 1
     assert events[0]["active_client"] == "CLIENT_A"
     assert events[0]["namespace_applied"] == "CLIENT_A"
+    assert events[0]["human_reviewed"] == "YES"
+    assert events[0]["software_features_used"] == "CHAT_RAG;KB_RETRIEVAL"
+    assert events[0]["output_reference"] == "JIRA-123 comment 4"
     assert events[0]["query_hash"] == hash_text("How to troubleshoot EABL validation?")
 
 
@@ -88,6 +96,8 @@ def test_monthly_aggregation_and_report_generation(tmp_path):
 
     assert summary.proposed_ip_attribution_percentage == 68.6
     assert summary.proposed_ip_income_amount == 6860
+    assert summary.total_productive_sap_isu_hours == 1
+    assert summary.assisted_hours_percentage == 100
     assert md_path.exists()
     assert csv_path.exists()
     assert "Monthly IP Box Usage Report" in md_path.read_text(encoding="utf-8")

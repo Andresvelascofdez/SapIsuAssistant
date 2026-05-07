@@ -6,9 +6,9 @@ This methodology is a management framework for advisor review. It does not calcu
 
 IP Box analysis should ultimately focus on qualifying profits, not gross revenue. Revenue mapping is a preliminary operational step used to identify which service income may be linked to the software asset.
 
-## Proprietary Software-Enabled Work
+## Company Software-Enabled Work
 
-The relevant distinction is between ordinary consulting and work materially assisted by the proprietary SAP IS-U Assistant. Generic AI usage alone is not enough. The evidence should show that the company software layer materially contributes to delivery.
+The relevant distinction is between ordinary consulting, model-only assistance and work materially assisted by the company-developed SAP IS-U Assistant software layer. Use of an external LLM provider alone is not enough. The evidence should show that the company's orchestration, retrieval, namespace filtering, incident/KB workflow, usage logging and reporting layer materially contributes to delivery.
 
 ## Definitions
 
@@ -25,11 +25,11 @@ IP Attribution % = Productive Hours Assisted / Total Productive SAP IS-U Hours x
 
 ### A. Maximum Position - Up To 100%
 
-Requires near-complete workflow centrality, consistent logs, ticket-level evidence, monthly reports and advisor validation.
+Exceptional/aggressive scenario only. Requires near-complete workflow centrality, consistent logs, ticket-level evidence, human review/verification, monthly reports, invoice/timesheet reconciliation and advisor validation. It is not a current claim.
 
 ### B. Target Position - 60%
 
-Requires a high assisted-hours ratio, credible contribution factors and a clean mapping between SAP IS-U service income and tool-assisted delivery.
+Measurable target scenario only. Requires a high assisted-hours ratio, credible contribution factors, output-used evidence, human review/verification and a clean mapping between SAP IS-U service income and tool-assisted delivery. It is supported only when real monthly logs produce the formula inputs.
 
 ### C. Conservative Fallback - 25%-40%
 

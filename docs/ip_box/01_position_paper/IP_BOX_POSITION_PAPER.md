@@ -8,7 +8,7 @@ Reference baseline: the Cyprus IP Box regime may cover copyrighted software and 
 
 ## Asset Overview
 
-SAP IS-U Assistant is a proprietary software tool developed for internal SAP IS-U consulting delivery. It combines a local web UI, client-aware knowledge storage, Qdrant vector search, OpenAI-assisted synthesis, incident registration, evidence management, research-agent ingestion, Kanban operations and finance support.
+SAP IS-U Assistant is a company-developed software tool for internal SAP IS-U consulting delivery. Its treatment as qualifying proprietary/copyrighted software remains subject to corporate ownership records and advisor review. It combines a local web UI, client-aware knowledge storage, Qdrant vector search, OpenAI-assisted synthesis, incident registration, evidence management, research-agent ingestion, Kanban operations and finance support.
 
 The current exploitation model is internal use by the company in SAP IS-U consulting work. It is not currently sold as SaaS or licensed externally. Future commercialization options may include private SaaS, desktop licensing, managed support services or partnerships with SAP consultancies.
 
@@ -56,15 +56,15 @@ Excluded:
 
 ## Maximum Position - Up To 100%
 
-This is an aggressive advisor-assessed position. It is supportable only if almost all relevant SAP IS-U service delivery is processed through SAP IS-U Assistant and the tool is demonstrably central to the output. Required evidence includes usage logs, ticket-level evidence, client work references, output-used confirmation, monthly reports and revenue mapping.
+This is an exceptional, aggressive advisor-assessed maximum position, not a current claim or default assumption. It is supportable only if almost all relevant SAP IS-U service delivery is processed through SAP IS-U Assistant and the tool is demonstrably central to the output. Required evidence includes usage logs, ticket-level evidence, client work references, output-used confirmation, human review/verification, monthly reports and revenue mapping. If this evidence is incomplete, this position should not be used.
 
 ## Target Position - 60%
 
-This is the internal target position. It requires strong but not absolute evidence that a substantial majority of productive SAP IS-U work is assisted by the tool. A plausible model is:
+This is an internal target scenario for advisor review, not a current claim. It requires strong but not absolute evidence that a substantial majority of productive SAP IS-U work is assisted by the tool. It must be supported by monthly usage logs, total productive SAP IS-U hours, assisted productive hours, output-used confirmation, human review and revenue mapping. A measurable model is:
 
 IP Attribution % = assisted productive hours / total productive SAP IS-U hours x software contribution factor x qualifying service factor.
 
-The target should be validated through several months of real logs and monthly reports.
+The target should be validated through several months of real logs and monthly reports. Until those logs exist and reconcile to invoices/timesheets, the 60% scenario should be treated as illustrative only.
 
 ## Conservative Fallback - 25%-40%
 

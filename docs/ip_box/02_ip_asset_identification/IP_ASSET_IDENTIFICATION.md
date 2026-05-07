@@ -19,7 +19,7 @@
 - Finance: expense/invoice tracking and OCR support.
 - IP Box evidence: usage logging and monthly report generation.
 
-## Owned IP
+## Potential Company-Owned IP
 
 The company may own the original proprietary software components it created, subject to advisor and corporate record review:
 

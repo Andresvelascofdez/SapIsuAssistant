@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.6.2 (2026-05-07)
+
+### IP Box Documentation Critical Review
+
+- Added a critical review document for the IP Box evidence package, covering unsupported claims, third-party ownership boundaries, attribution positions, usage logging sufficiency, fabricated evidence controls and advisor-pack completeness.
+- Tightened attribution language:
+  - The 100% position is now explicitly marked as exceptional, aggressive and unsupported unless near-total workflow centrality is proven through logs and advisor validation.
+  - The 60% position is now documented as a measurable target scenario, not a current claim.
+- Expanded usage logging fields for monthly reports with human review, verification status, software features used, retrieved KB/incident IDs and output reference fields.
+- Updated monthly report rendering to show total productive SAP IS-U hours and assisted-hours percentage.
+- Rephrased model-provider comparison wording into a cleaner company-developed-software-plus-external-LLM-provider boundary.
+- Updated the visible application version to `v0.6.2`.
+
 ## v0.6.1 (2026-05-07)
 
 ### English Documentation

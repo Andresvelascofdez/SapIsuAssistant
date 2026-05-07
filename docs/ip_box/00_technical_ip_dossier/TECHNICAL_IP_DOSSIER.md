@@ -102,7 +102,7 @@ The product addresses the following problems:
 - Fragmented documentation across SAP Help, SAP Datasheet, regulators, EDIFACT/MaKo references and consultant notes.
 - Lack of structured evidence for software-assisted delivery.
 
-The key product idea is not simply to ask a language model a question. The key idea is to place the model inside a governed SAP IS-U workflow where retrieved context, namespace, source visibility, KB status, incident evidence and advisor-facing records are controlled by the application.
+The key product idea is to provide a company-developed SAP IS-U workflow around an external LLM provider. Retrieved context, namespace, source visibility, KB status, incident evidence and advisor-facing records are controlled by the application before any model output is used.
 
 <!-- pagebreak -->
 
@@ -149,7 +149,7 @@ The repository can evidence software development and current product design. It 
 
 # 4. Innovative and Custom Elements
 
-This section identifies the custom software elements that distinguish the tool from ordinary ChatGPT usage.
+This section identifies the custom software elements that distinguish the tool from model-only assistance.
 
 ## Semantic SAP IS-U knowledge retrieval
 
@@ -224,7 +224,7 @@ FastAPI Web Application
 
 ## Main architecture principle
 
-The application controls context before AI generation. The LLM receives only the context selected by the tool's retrieval, namespace and review logic. This is the core boundary between generic AI and proprietary software.
+The application controls context before AI generation. The LLM receives only the context selected by the tool's retrieval, namespace and review logic. This is the core boundary between external model services and company-developed software controls.
 
 <!-- pagebreak -->
 
@@ -246,7 +246,7 @@ The frontend is a local web UI designed as a consultant workbench rather than a 
 - Manage finance records.
 - Configure settings.
 
-The UI is part of the proprietary IP because it implements a domain-specific workflow for SAP IS-U consultants. It is not merely a chat window. It brings together namespace control, evidence capture, knowledge governance and technical retrieval in one operating surface.
+The UI is part of the company-developed software layer because it implements a domain-specific workflow for SAP IS-U consultants. It brings together namespace control, evidence capture, knowledge governance and technical retrieval in one operating surface.
 
 ## UI modules
 
@@ -791,6 +791,30 @@ The current product is useful, but the following limitations matter for advisor 
 
 <!-- pagebreak -->
 
+# Appendix E. Attribution Safeguards
+
+## Maximum position
+
+Any position up to 100% is exceptional and aggressive. It should not be treated as a current claim. It requires near-total workflow centrality, complete monthly usage logs, ticket-level evidence, output-used confirmation, human review, invoice/timesheet reconciliation and explicit advisor approval.
+
+## 60% target scenario
+
+The 60% position is a target scenario, not an achieved result. It is supported only when real logs produce the formula inputs:
+
+- assisted productive SAP IS-U hours;
+- total productive SAP IS-U hours;
+- software contribution factor;
+- qualifying service factor;
+- client-delivery output evidence;
+- human review/verification;
+- revenue mapping.
+
+## Model-only boundary
+
+Work should not be attributed to the software asset merely because an external AI model was used. The evidence should show that SAP IS-U Assistant's company-developed layer materially contributed through retrieval, namespace filtering, KB/incident workflows, source audit, usage logging or dossier/report generation.
+
+<!-- pagebreak -->
+
 # Appendix D. Advisor Questions
 
 The company should ask advisors to review:
@@ -808,4 +832,4 @@ The company should ask advisors to review:
 
 ## Closing statement
 
-SAP IS-U Assistant should be presented as a proprietary software product that uses third-party AI as a provider, not as a claim to own SAP knowledge or the OpenAI model. The strongest evidence position will come from consistent use of the tool in real SAP IS-U delivery, reliable usage logs, client-isolated incident records, governed knowledge management and advisor-reviewed revenue mapping.
+SAP IS-U Assistant should be presented as a company-developed software product that uses third-party AI as a provider, not as a claim to own SAP knowledge or the OpenAI model. The strongest evidence position will come from consistent use of the tool in real SAP IS-U delivery, reliable usage logs, client-isolated incident records, governed knowledge management and advisor-reviewed revenue mapping.

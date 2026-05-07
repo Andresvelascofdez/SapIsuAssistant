@@ -2,7 +2,7 @@
 
 SAP IS-U Assistant is a local, AI-assisted technical workbench for SAP IS-U consulting. It combines a structured knowledge base, RAG chat, semantic retrieval, incident registration, client-isolated evidence storage, research agents, Kanban operations, finance utilities and IP Box evidence reporting.
 
-The tool is designed as proprietary internal software. It is not a generic ChatGPT wrapper: the differentiating value is in the orchestration layer, SAP IS-U data model, client namespace separation, structured knowledge workflow, incident evidence model, research pipeline, review/indexing controls and reporting assets around software-enabled SAP IS-U technical delivery.
+The tool is implemented as company-developed internal software with an external LLM provider. Its differentiating value is in the orchestration layer, SAP IS-U data model, client namespace separation, structured knowledge workflow, incident evidence model, research pipeline, review/indexing controls and reporting assets around software-enabled SAP IS-U technical delivery.
 
 ## Key Capabilities
 

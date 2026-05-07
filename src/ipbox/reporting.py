@@ -21,6 +21,12 @@ REVENUE_MAPPING_COLUMNS = [
     "assisted_hours_percentage",
     "software_contribution_factor",
     "qualifying_service_factor",
+    "software_features_used",
+    "retrieved_kb_item_ids",
+    "retrieved_incident_ids",
+    "output_reference",
+    "verification_status",
+    "human_reviewed",
     "proposed_ip_attribution_percentage",
     "proposed_ip_income_amount",
     "excluded_amount",
@@ -34,8 +40,11 @@ class MonthlyIPBoxSummary:
     usage_count: int
     assisted_usage_count: int
     client_delivery_usage_count: int
+    human_reviewed_usage_count: int
     actual_hours: float
+    total_productive_sap_isu_hours: float
     assisted_hours: float
+    assisted_hours_percentage: float
     estimated_without_tool_hours: float
     estimated_time_saved_hours: float
     average_software_contribution_factor: float
@@ -84,20 +93,25 @@ def aggregate_monthly_usage(
     ]
     avg_contribution = round(mean(contribution_values), 4) if contribution_values else 0.0
     total_hours = total_productive_sap_isu_hours if total_productive_sap_isu_hours is not None else actual_minutes / 60
+    assisted_hours = assisted_minutes / 60
     attribution = calculate_ip_attribution(
-        assisted_minutes / 60,
+        assisted_hours,
         total_hours,
         avg_contribution,
         qualifying_service_factor,
     )
+    assisted_percentage = round((assisted_hours / total_hours * 100), 2) if total_hours > 0 else 0.0
     ip_income = round(total_relevant_sap_isu_service_revenue * attribution / 100, 2)
     return MonthlyIPBoxSummary(
         month=month,
         usage_count=len(month_events),
         assisted_usage_count=sum(1 for event in month_events if event.get("output_used") in {"YES", "PARTIAL"}),
         client_delivery_usage_count=sum(1 for event in month_events if event.get("used_for_client_delivery") == "YES"),
+        human_reviewed_usage_count=sum(1 for event in month_events if event.get("human_reviewed") == "YES"),
         actual_hours=round(actual_minutes / 60, 2),
-        assisted_hours=round(assisted_minutes / 60, 2),
+        total_productive_sap_isu_hours=round(total_hours, 2),
+        assisted_hours=round(assisted_hours, 2),
+        assisted_hours_percentage=assisted_percentage,
         estimated_without_tool_hours=round(without_tool_minutes / 60, 2),
         estimated_time_saved_hours=round(saved_minutes / 60, 2),
         average_software_contribution_factor=avg_contribution,
@@ -156,8 +170,11 @@ This report is an internal evidence artefact for advisor review. It does not det
 | Usage records | {summary.usage_count} |
 | Assisted usage records | {summary.assisted_usage_count} |
 | Used for client delivery | {summary.client_delivery_usage_count} |
+| Human-reviewed records | {summary.human_reviewed_usage_count} |
 | Actual productive hours recorded | {summary.actual_hours:.2f} |
+| Total productive SAP IS-U hours used in formula | {summary.total_productive_sap_isu_hours:.2f} |
 | Tool-assisted hours | {summary.assisted_hours:.2f} |
+| Assisted hours percentage | {summary.assisted_hours_percentage:.2f}% |
 | Estimated hours without tool | {summary.estimated_without_tool_hours:.2f} |
 | Estimated time saved | {summary.estimated_time_saved_hours:.2f} |
 | Average software contribution factor | {summary.average_software_contribution_factor:.2f} |
@@ -173,5 +190,5 @@ IP Attribution % = (Productive Hours Assisted by SAP IS-U Assistant / Total Prod
 
 ## Advisor Review
 
-The proposed percentage is a management estimate based on recorded usage. It must be reviewed by qualified Cyprus tax advisors before being used in any filing or tax position.
+The proposed percentage is a management estimate based on recorded usage, human review evidence, ticket references and revenue mapping. It must be reviewed by qualified Cyprus tax advisors before being used in any filing or tax position.
 """

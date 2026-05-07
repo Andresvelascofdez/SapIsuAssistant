@@ -1,13 +1,13 @@
 # Third-Party Components and IP Boundary
 
-The qualifying IP under review is the proprietary SAP IS-U Assistant software layer. It is not SAP, not OpenAI, not Qdrant, not client data and not third-party documentation.
+The candidate qualifying IP under review is the company-developed SAP IS-U Assistant software layer, subject to ownership and advisor review. It is not SAP, not OpenAI, not Qdrant, not client data and not third-party documentation.
 
 | Component | Type | Purpose | Owned by Company? | Licence / Provider | Risk | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | SAP IS-U | Third-party enterprise software | Consulting subject matter | No | SAP | High if confused with owned IP | SAP objects are references only. |
 | SAP standard tables/transactions/programs | Third-party domain objects | Technical classification | No | SAP | Medium | Used as metadata, not owned content. |
 | Client data | Confidential customer information | Incident context | No | Client | High | Must be isolated and anonymised for advisor packs. |
-| OpenAI API | External AI service | Embeddings and responses | No | OpenAI | Medium | Company owns workflow, not model. |
+| OpenAI API | External AI service | Embeddings and responses | No | OpenAI | Medium | Company-developed workflow uses the provider; the model and platform are not owned. |
 | Qdrant | Vector database | Retrieval index | No | Qdrant/open-source terms | Low | Infrastructure component. |
 | Python | Runtime | Application platform | No | PSF | Low | Runtime only. |
 | FastAPI/Jinja/Alpine/Tailwind | Framework/UI libraries | Web application | No | OSS licences | Low | Check licence notices if distributed. |
