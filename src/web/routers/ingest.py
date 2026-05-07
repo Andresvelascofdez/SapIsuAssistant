@@ -77,7 +77,7 @@ def _run_synthesis(ingestion_id: str, text: str, scope: str, client_code: str | 
 @router.get("/ingest")
 async def ingest_page(request: Request):
     ctx = get_template_context(request)
-    return templates.TemplateResponse("ingest.html", ctx)
+    return templates.TemplateResponse(request, "ingest.html", ctx)
 
 
 @router.post("/api/ingest/text")

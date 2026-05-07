@@ -168,7 +168,7 @@ def _auto_create_kb_draft(repo: IncidentRepository, code: str, incident: Inciden
 @router.get("/incidents")
 async def incidents_page(request: Request):
     ctx = deps.get_template_context(request)
-    return deps.templates.TemplateResponse("incidents.html", ctx)
+    return deps.templates.TemplateResponse(request, "incidents.html", ctx)
 
 
 @router.get("/incidents/{incident_id}")
@@ -176,14 +176,14 @@ async def incident_detail_page(incident_id: str, request: Request):
     ctx = deps.get_template_context(request)
     ctx["incident_id"] = incident_id
     ctx["incident_client_code"] = request.query_params.get("client_code", "")
-    return deps.templates.TemplateResponse("incident_detail.html", ctx)
+    return deps.templates.TemplateResponse(request, "incident_detail.html", ctx)
 
 
 @router.get("/ipbox/dossier")
 async def ipbox_dossier_page(request: Request):
     ctx = deps.get_template_context(request)
     ctx["current_year"] = datetime.now().year
-    return deps.templates.TemplateResponse("ipbox_dossier.html", ctx)
+    return deps.templates.TemplateResponse(request, "ipbox_dossier.html", ctx)
 
 
 @router.get("/api/incidents")

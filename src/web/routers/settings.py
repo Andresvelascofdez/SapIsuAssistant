@@ -18,7 +18,7 @@ async def settings_page(request: Request):
     ctx = get_template_context(request)
     cm = get_client_manager()
     ctx["client_list"] = [{"code": c.code, "name": c.name} for c in cm.list_clients()]
-    return templates.TemplateResponse("settings.html", ctx)
+    return templates.TemplateResponse(request, "settings.html", ctx)
 
 
 @router.post("/api/settings/client")

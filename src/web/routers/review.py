@@ -54,7 +54,7 @@ def _format_indexing_error(error: Exception) -> str:
 @router.get("/review")
 async def review_page(request: Request):
     ctx = get_template_context(request)
-    return templates.TemplateResponse("review.html", ctx)
+    return templates.TemplateResponse(request, "review.html", ctx)
 
 
 @router.get("/api/review/items")

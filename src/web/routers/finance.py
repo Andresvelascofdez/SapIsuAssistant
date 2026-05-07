@@ -73,13 +73,13 @@ def _expense_to_dict(e):
 @router.get("/finance/expenses")
 async def expenses_page(request: Request):
     ctx = get_template_context(request)
-    return templates.TemplateResponse("finance_expenses.html", ctx)
+    return templates.TemplateResponse(request, "finance_expenses.html", ctx)
 
 
 @router.get("/finance/settings")
 async def finance_settings_page(request: Request):
     ctx = get_template_context(request)
-    return templates.TemplateResponse("finance_settings.html", ctx)
+    return templates.TemplateResponse(request, "finance_settings.html", ctx)
 
 
 # ── Settings API ──
@@ -359,27 +359,27 @@ def _invoice_item_to_dict(item):
 @router.get("/finance/summary")
 async def summary_page(request: Request):
     ctx = get_template_context(request)
-    return templates.TemplateResponse("finance_summary.html", ctx)
+    return templates.TemplateResponse(request, "finance_summary.html", ctx)
 
 
 @router.get("/finance/invoices")
 async def invoices_page(request: Request):
     ctx = get_template_context(request)
-    return templates.TemplateResponse("finance_invoices.html", ctx)
+    return templates.TemplateResponse(request, "finance_invoices.html", ctx)
 
 
 @router.get("/finance/invoices/new")
 async def invoice_new_page(request: Request):
     ctx = get_template_context(request)
     ctx["invoice_id"] = None
-    return templates.TemplateResponse("finance_invoice_edit.html", ctx)
+    return templates.TemplateResponse(request, "finance_invoice_edit.html", ctx)
 
 
 @router.get("/finance/invoices/{invoice_id}/edit")
 async def invoice_edit_page(invoice_id: str, request: Request):
     ctx = get_template_context(request)
     ctx["invoice_id"] = invoice_id
-    return templates.TemplateResponse("finance_invoice_edit.html", ctx)
+    return templates.TemplateResponse(request, "finance_invoice_edit.html", ctx)
 
 
 # ── Invoices API ──

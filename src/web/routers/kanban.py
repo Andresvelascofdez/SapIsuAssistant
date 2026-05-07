@@ -120,7 +120,7 @@ def _column_to_dict(c):
 @router.get("/kanban")
 async def kanban_page(request: Request):
     ctx = get_template_context(request)
-    return templates.TemplateResponse("kanban.html", ctx)
+    return templates.TemplateResponse(request, "kanban.html", ctx)
 
 
 @router.get("/api/kanban/tickets")

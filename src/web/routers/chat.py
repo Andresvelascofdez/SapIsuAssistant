@@ -18,7 +18,7 @@ router = APIRouter()
 @router.get("/chat")
 async def chat_page(request: Request):
     ctx = get_template_context(request)
-    return templates.TemplateResponse("chat.html", ctx)
+    return templates.TemplateResponse(request, "chat.html", ctx)
 
 
 # ── Chat send (with session persistence) ──
