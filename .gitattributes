@@ -11,6 +11,9 @@
 *.json text eol=lf
 *.md text eol=lf
 
+# Binary documentation artifacts
+*.pdf binary
+
 # Shell
 *.sh text eol=lf
 

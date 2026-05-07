@@ -1,266 +1,248 @@
 # Changelog
 
+## v0.6.1 (2026-05-07)
+
+### English Documentation
+
+- Rewrote `README.md` in English with a product-oriented structure, architecture overview, endpoint summary, research-agent instructions, IP Box evidence usage logging examples and compliance notes.
+- Rewrote `CHANGELOG.md` in English to remove mixed-language release notes and improve advisor/developer readability.
+
+### Technical IP Dossier
+
+- Added a product-level Technical IP Dossier in English under `docs/ip_box/00_technical_ip_dossier/`.
+- Added both Markdown source and generated PDF:
+  - `TECHNICAL_IP_DOSSIER.md`
+  - `TECHNICAL_IP_DOSSIER.pdf`
+- The dossier covers product overview, problem solved, custom software elements, technical architecture, AI boundary, third-party IP boundary, data isolation, evidence model, current implementation status, planned/TBC items and roadmap.
+- The document explicitly distinguishes the proprietary software layer from SAP, OpenAI, Qdrant, public sources and client confidential data.
+
 ## v0.6.0 (2026-05-06)
 
 ### IP Box Evidence Pack
 
-- Creado paquete documental completo bajo `docs/ip_box/` para preparar revision de asesores sobre SAP IS-U Assistant como posible activo de software protegido por copyright.
-- Incluye position paper, identificacion del activo, arquitectura tecnica, informe de desarrollo/R&D de software, indice de evidencias, decisiones tecnicas, inventario de codigo, frontera de IP de terceros, procedencia de knowledge base, procedimiento operativo interno, especificacion de usage logging, evidencias por ticket, reportes mensuales, metodologia economica de atribucion, definicion de service line, revenue mapping, input de TP/valuation, benchmark de productividad, QA evidence, controles de datos, guias internas, roadmap, notas de management y advisor pack index.
-- La documentacion distingue explicitamente entre funcionalidad existente, planned/TBC y evidencia real pendiente.
-- Se evita simular evidencias: no se inventan commits, fechas, screenshots, usage logs, horas ni tickets.
-- Se crea `AGENTS.md` con instrucciones para futuros agentes: preservar funcionalidad, mantener modularidad, no hardcodear datos reales, no inventar evidencia y usar ejemplos anonimizados.
+- Added a complete advisor-facing documentation pack under `docs/ip_box/` for assessing SAP IS-U Assistant as a potential copyrighted software asset.
+- Added position paper, IP asset identification, technical architecture, software development/R&D report, development evidence index, technical decisions, source code inventory, third-party IP boundary, knowledge-base provenance, internal operating procedure, usage logging specification, ticket-level evidence templates, monthly report template, economic attribution methodology, service-line definition, revenue mapping, transfer-pricing/valuation input, productivity benchmark, QA evidence, data protection controls, user/developer guides, roadmap, management notes template and advisor pack index.
+- The documentation distinguishes implemented functionality, planned/TBC work and factual evidence still to be collected.
+- The pack avoids fabricated evidence: no invented commits, dates, screenshots, usage logs, hours or tickets.
+- Added `AGENTS.md` with project-specific instructions for future AI coding agents.
 
 ### Usage Logging and Monthly Reporting
 
-- Nuevo modulo `src/ipbox/usage_logging.py` para generar `usage_id`, hashear query/response, validar eventos y guardar usage logs JSONL por mes.
-- Nuevo modulo `src/ipbox/reporting.py` para agregar usage logs mensuales, calcular attribution percentage preliminar, generar Markdown/CSV bajo `reports/ip_box/YYYY-MM/` y exportar template de revenue mapping.
-- Nuevo template `reports/templates/revenue_mapping_template.csv`.
-- Nuevos tests `tests/test_ipbox_usage_reporting.py` para generacion de usage IDs, guardado/lectura de logs, preservacion de namespace, formula de atribucion, reporte mensual y revenue mapping template.
-- Version de app actualizada a `v0.6.0`.
+- Added `src/ipbox/usage_logging.py` for usage ID generation, query/response hashing, usage event validation and monthly JSONL usage logs.
+- Added `src/ipbox/reporting.py` for monthly aggregation, preliminary attribution calculation, Markdown/CSV report generation and revenue mapping template export.
+- Added `reports/templates/revenue_mapping_template.csv`.
+- Added `tests/test_ipbox_usage_reporting.py` covering usage ID generation, log save/read, namespace preservation, attribution formula, monthly report generation and revenue mapping template creation.
+- Updated app version to `v0.6.0`.
 
 ## v0.5.0 (2026-05-06)
 
-### Research SAP IS-U (NEW)
+### SAP IS-U Research Agents
 
-- Nuevo pipeline controlado para convertir fuentes SAP IS-U externas en candidatos KB.
-- Source registry con fuentes priorizadas: SAP Help, SAP Learning, SAP Community, SAP Business Accelerator Hub, SAP Datasheet, LeanX, TCodeSearch, SE80, Michael Management, BDEW/EDI@Energy, SAP PRESS/Rheinwerk y blogs especializados.
-- Candidatos con tipo KB, tags, objetos SAP, signals, sources, confianza, riesgo de copyright y auditoria automatica.
-- Promocion de candidatos a KB `DRAFT` con opcion de auto-aprobar e indexar candidatos de bajo riesgo (`PASSED` + copyright `LOW`).
-- Nuevo agente `Indexer`; si Qdrant/OpenAI fallan, el item vuelve a `DRAFT` para revision manual.
-- Recoleccion puntual de URL publicas y creacion manual desde extractos/notas.
-- Bloqueo de promocion para fuentes `REFERENCE_ONLY` con riesgo alto.
-- Ejecuciones persistentes de agentes con estados por fase: Collector, Normalizer, Auditor, Ingestor e Indexer.
-- Busqueda controlada por tema y fuente con contadores de URLs descubiertas, paginas recolectadas, candidatos, borradores KB e items indexados.
-- Catalogo interno de semillas para objetos SAP frecuentes cuando la busqueda web no devuelve URLs.
-- Catalogo automatico de topicos por dominios SAP IS-U/MaKo para lanzar multiples runs sin escribir queries manuales.
-- Topic Scout amplia el catalogo con objetos SAP, transacciones, tablas, procesos EDIFACT, BPEM, APIs y S/4HANA Utilities.
-- Catalogo ampliado a 145 topicos con packs de expertise: transacciones/navegacion, customizing/SPRO, mensajes de error, ABAP/BAdIs/exits, runbooks end-to-end, MaKo versionado, S/4HANA Utilities/Fiori/API y reglas por pais fuera de Alemania.
-- El fallback del crawler selecciona topicos de forma diversa por categoria y por seed query para cubrir mas areas funcionales aunque las fuentes externas bloqueen o fallen.
-- Nuevas fuentes regulatorias `REGULATOR`: CNMC Espana, Utility Regulator Northern Ireland, Ireland Retail Market Design Service y CRE France.
-- Nuevos adaptadores directos para SAP Help y country packs: FI-CA, meter reading, device management, move-in/out, invoicing reversal, BAdIs/BAPIs, S/4HANA roles/APIs, CNMC, UREGNI, RMD Ireland y CRE.
-- Los adaptadores directos tienen prioridad sobre la busqueda generica; si la busqueda externa falla, las URLs directas ya descubiertas se conservan.
-- SAP Help usa resumenes estaticos propios para paginas publicas conocidas cuando el portal no devuelve HTML legible.
-- El Topic Extractor acepta documentos regulatorios/country-market aunque no haya objetos SAP tecnicos detectables.
-- Extraccion PDF con `pypdf` en el research fetcher para guias regulatorias y market-message publicas.
-- Nuevo crawler autonomo controlado con ejecuciones persistentes, timeline, deduplicacion de topicos descubiertos y encolado automatico de runs.
-- Nuevas tablas `crawl_runs`, `crawl_run_events` y `discovered_topics` dentro del repositorio de research.
+- Added a controlled pipeline for turning external SAP IS-U references into KB candidates.
+- Added a source registry with prioritized sources: SAP Help, SAP Learning, SAP Community Utilities, SAP Business Accelerator Hub, SAP Datasheet, LeanX, TCodeSearch, SE80, Michael Management, BDEW/EDI@Energy, SAP PRESS/Rheinwerk and specialized context sources.
+- Added regulator sources: CNMC Spain, Utility Regulator Northern Ireland, Ireland Retail Market Design Service and CRE France.
+- Added candidates with KB type, tags, SAP objects, signals, source metadata, confidence, copyright risk and automatic audit status.
+- Added automatic promotion to KB DRAFT and optional auto-approval/indexing for low-risk candidates.
+- Added the Indexer agent. If Qdrant/OpenAI indexing fails, the item remains in DRAFT for manual review.
+- Added persistent research runs with Collector, Normalizer, Auditor, Ingestor and Indexer statuses.
+- Added a curated SAP IS-U topic catalog with 145 topics covering transactions, navigation, customizing/SPRO, error messages, ABAP/BAdIs/exits, troubleshooting runbooks, MaKo, S/4HANA Utilities/Fiori/API and country rules.
+- Added direct adapters for selected SAP Help topics and country/regulator packs.
+- Added PDF extraction with `pypdf` for public regulator and market-message documents.
+- Added autonomous crawler runs, crawler events and discovered topic persistence.
 
 ### Knowledge Types
 
-- Nuevos tipos KB: `SAP_TABLE`, `SAP_TRANSACTION`, `SAP_PROGRAM`, `SAP_MESSAGE`, `SAP_API`, `SAP_PROCESS`, `TECHNICAL_OBJECT`, `MARKET_PROCESS`, `EDIFACT_SPEC`.
-- Schema y prompt de sintesis actualizados para aceptar los tipos tecnicos nuevos.
+- Added KB types for SAP technical content:
+  - `SAP_TABLE`
+  - `SAP_TRANSACTION`
+  - `SAP_PROGRAM`
+  - `SAP_MESSAGE`
+  - `SAP_API`
+  - `SAP_PROCESS`
+  - `TECHNICAL_OBJECT`
+  - `MARKET_PROCESS`
+  - `EDIFACT_SPEC`
+- Updated structured synthesis schema and prompt handling for the new types.
 
-### UI / API
+### UI and API
 
-- Ingesta incorpora una seccion `SAP IS-U Research Candidates` previa a los borradores KB.
-- Ingesta incorpora un dashboard grafico `Research Agent Runs` con timeline de eventos.
-- Ingesta incorpora `Starter topics` para lanzar temas iniciales sin escribir queries manualmente.
-- Ingesta incorpora `Run Full Catalog` para crear candidatos, KB Drafts e indexado opcional de muchos topicos automaticamente.
-- Ingesta incorpora `Autonomous Source Crawler` con agentes `Topic Scout`, `Source Crawler`, `Topic Extractor` y `Run Queuer`.
-- Ingesta incorpora `Approve & Index All` para aprobar e indexar todos los borradores KB del scope seleccionado.
-- El auditor permite auto-indexar candidatos oficiales/regulatorios de bajo riesgo con senal clara de proceso aunque no detecte tabla/transaccion SAP.
-- Listados de Ingesta ahora tienen filtros y paneles plegables para evitar scroll largo.
-- Los botones de aprobacion/indexado se ocultan cuando el item KB ya esta `APPROVED`; `Reject` queda disponible para excluirlo.
-- Los agentes de research/crawler fuerzan `Standard KB`; la ingesta especifica de cliente queda manual.
-- Nuevos endpoints `/api/research/sources`, `/api/research/candidates`, `/api/research/collect-url`, promocion a KB draft y rechazo de candidatos.
-- Nuevos endpoints `/api/research/runs` y `/api/research/runs/{id}/events` para lanzar y monitorizar agentes.
-- Nuevo endpoint `/api/research/runs/catalog` para lanzar el catalogo completo o por categoria.
-- Version de app actualizada a `v0.5.0`.
+- Added SAP IS-U Research Candidates to the Ingesta page.
+- Added Research Agent Runs dashboard with event timelines.
+- Added starter topics for common SAP IS-U objects.
+- Added Run Full Catalog workflow.
+- Added Autonomous Source Crawler UI.
+- Added Approve & Index All for KB drafts.
+- Added collapsible/filterable long lists in Ingesta.
+- Hid approval/index controls for already approved items while keeping Reject available.
+- Forced research/crawler output into Standard KB; client-specific knowledge remains manual.
+- Added research API endpoints for sources, candidates, runs, crawler runs, discovered topics and catalog runs.
 
 ### Tests
 
-- Nuevos tests para fuentes por defecto, normalizacion de objetos SAP/MaKo, deduplicacion, promocion a KB `DRAFT`, bloqueo de fuentes reference-only y controles UI.
-- Nuevos tests de orquestacion con busqueda/fetch mockeados para validar el pipeline completo sin depender de internet.
-- Nuevos tests de catalogo automatico, ejecucion por categoria e ingesta masiva a KB `DRAFT`.
-- Nuevos tests para crawler autonomo, persistencia de crawls, topicos descubiertos y encolado de runs.
-- Nuevos tests para aprobacion e indexado masivo de borradores KB.
+- Added tests for source registry, candidate normalization, SAP object detection, deduplication, KB draft promotion, reference-only source blocking, orchestration, catalog runs, crawler persistence, discovered topics, auto-indexing and UI controls.
 
 ## v0.4.0 (2026-05-04)
 
-### Incidencias SAP IS-U + IP Box (NEW)
+### SAP IS-U Incidents and IP Box Evidence
 
-- Nuevo modulo `Incidencias` para registrar incidencias tecnicas SAP IS-U por cliente.
-- Almacenamiento aislado por cliente en `data/clients/<CLIENT_CODE>/incidents.sqlite`.
-- Evidencias por incidencia como archivo, link o nota, con SHA256 para ficheros subidos.
-- Pantallas `/incidents`, `/incidents/{id}` y `/ipbox/dossier`.
-- APIs CRUD de incidencias, evidencias, generacion de KB draft y dossier anual PDF.
-- Dossier IP Box anual en ingles con metodologia, totales, tablas y apendices por incidencia candidata.
+- Added the Incidencias module for client-isolated SAP IS-U technical incidents.
+- Added `data/clients/<CLIENT_CODE>/incidents.sqlite`.
+- Added incident evidence as file, link or note, with SHA256 for uploaded files.
+- Added pages:
+  - `/incidents`
+  - `/incidents/{id}`
+  - `/ipbox/dossier`
+- Added CRUD APIs for incidents and evidence.
+- Added incident-to-KB draft generation.
+- Added annual English IP Box evidence dossier PDF based on incidents and hours.
+- The dossier is an evidence pack and does not calculate Cyprus tax outcomes, QE/OE, nexus fraction or tax savings.
 
-### Assistant / Ingesta
+### Assistant and Ingesta
 
-- Los borradores KB pendientes se revisan ahora dentro de Ingesta; `/review` queda como ruta legacy.
-- Las incidencias pueden generar borradores KB en estado `DRAFT`, sin auto-aprobacion ni indexado directo.
-- Correccion de schema estricto para `signals` en sintesis OpenAI.
-- La API key de OpenAI se carga desde entorno, `.env` o Settings; Settings persiste la clave en `.env` fuera de tests.
-- Mensajes del chat actualizados para dirigir al usuario a la cola de borradores en Ingesta.
+- Moved KB draft review into Ingesta; `/review` remains as a legacy route.
+- Incident-generated KB entries remain DRAFT until approved.
+- Fixed strict synthesis schema handling for `signals`.
+- Added `.env` and Settings-based OpenAI API key loading.
+- Updated chat messages to direct users to Ingesta review when no relevant knowledge is found.
 
 ### Kanban
 
-- Nuevas acciones masivas para cerrar todos los tickets y borrar todos los tickets cerrados.
-- Se mantiene la limpieza automatica de tickets cerrados antiguos al listar tickets.
-- UI de Kanban actualizada con botones para las acciones masivas.
+- Added bulk close all tickets.
+- Added bulk delete closed tickets.
+- Preserved automatic cleanup of old closed tickets.
+- Updated Kanban UI with bulk action buttons.
 
-### Chat / UI
+### Chat and UI
 
-- Boton visible para borrar el chat activo y papelera visible por sesion.
-- Incidencias incorpora botones explicitos de buscar/limpiar y contador de resultados.
-- Navegacion principal actualizada con Incidencias e IP Box.
+- Added visible delete controls for the active chat and chat sessions.
+- Added explicit search/clear controls and result counts to Incidents.
+- Updated navigation with Incidents and IP Box.
 
 ### Tests
 
-- Nuevos tests para repositorio/API/PDF de incidencias, aislamiento por cliente, evidencias y KB drafts.
-- Nuevos tests de `.env` y schema de sintesis OpenAI.
-- Nuevos tests de acciones masivas Kanban y controles UI de chat/incidencias.
-- Regresion ejecutada sobre suites principales de Assistant/Kanban/Finance no OCR-heavy.
+- Added tests for incident repository/API/PDF generation, client isolation, evidence and KB drafts.
+- Added tests for `.env` and synthesis schema behavior.
+- Added tests for Kanban bulk actions and UI controls.
+- Ran the main Assistant/Kanban/Finance non-OCR-heavy regression suites.
 
 ## v0.3.0 (2026-02-13)
 
-### Finance Module (NEW)
+### Finance
 
-- **Settings**: Tasa impositiva por defecto, datos de empresa (nombre, direccion, CIF, email, telefono, datos bancarios)
-- **Categorias de gasto**: CRUD completo, reordenar, activar/desactivar, proteccion contra borrado si tiene gastos
-- **Gastos**: CRUD con periodo, categoria, importe, comerciante, notas, documento adjunto, flag "documento no requerido"
-- **Facturas**: CRUD con lineas de detalle, calculo automatico de subtotal/IVA/total, estados (PENDING/PAID)
-- **Generacion de PDF**: Facturas generadas como PDF con datos de empresa, cliente, lineas y totales
-- **Resumen financiero**: Vista mensual y anual con ingresos, gastos, beneficio, impuestos y neto
-- **Documentos**: Subida, descarga, hash SHA256, vinculacion a gastos (desvinculacion automatica al borrar)
-- **OCR**: Extraccion de texto desde PDF e imagenes, deteccion de importes y fechas (formato europeo incluido)
-- **Exportacion CSV**: Gastos y facturas exportables en formato CSV
-- **Bulk import gastos**: Subida multiple de PDFs/imagenes con deteccion automatica de importes via OCR
-- **Bulk import facturas**: Subida multiple de PDFs/imagenes con creacion automatica de facturas
-- **Mark All Paid**: Boton para marcar todas las facturas pendientes como pagadas de una vez
-- **Net - Personal / Net - Business**: Doble columna en resumen financiero:
-  - Net - Personal = ingresos - impuestos (gastos son personales, no se deducen)
-  - Net - Business = ingresos - gastos - impuestos (vision empresarial)
-- **Navegacion por pestanas**: Tabs consistentes (Summary, Expenses, Invoices, Settings) en todas las paginas finance
+- Added finance settings, company data and tax rate configuration.
+- Added expense categories with CRUD, reorder, activation/deactivation and delete protection.
+- Added expenses with period, category, amount, merchant, notes, documents and document-not-required flag.
+- Added invoices with line items, subtotal/VAT/total calculation and PENDING/PAID states.
+- Added invoice PDF generation.
+- Added monthly and yearly finance summaries.
+- Added document upload/download, SHA256 hashing and expense linking.
+- Added OCR extraction from PDFs/images.
+- Added CSV exports for expenses and invoices.
+- Added bulk expense import.
+- Added bulk invoice import.
+- Added Mark All Paid.
+- Added Net Personal and Net Business summary views.
+- Added consistent finance tab navigation.
+- Improved dark mode and table alignment.
 
-### Finance - UI / Dark Mode
+### Kanban Enhancements
 
-- **Alineacion izquierda**: Todas las columnas de tablas (headers y celdas) alineadas a la izquierda
-- **Dark mode mejorado**: Texto blanco y colores claros en modo oscuro para legibilidad
-- **CSS suplementario**: Utilidades Tailwind faltantes anadidas en base.html (text-left, dark:text-sap-400, dark:text-amber-400, grid responsive, etc.)
+- Made `ticket_id` editable with uniqueness validation.
+- Added description field.
+- Added stale ticket alerts.
+- Unified create/edit modals.
+- Added client dropdown in ticket modals.
+- Improved drag/drop payload handling.
+- Added client_code handling to history/delete endpoints.
 
-### Kanban - Mejoras
+### Tests
 
-- **ticket_id editable**: El identificador verde es editable en creacion y edicion, con validacion de unicidad
-- **Campo descripcion**: Los tickets ahora tienen un campo de descripcion ademas de las notas
-- **Alertas de tickets stale**: Indicador visual de tickets sin movimiento (dias configurables), filtra solo NO_ANALIZADO y EN_PROGRESO
-- **Modales unificados**: Creacion y edicion usan el mismo modal con tags y links
-- **Cliente en modal**: Dropdown de cliente visible en modal de detalle/edicion
-- **Drag-drop mejorado**: client_code incluido en respuestas API para movimiento fiable entre columnas
-- **History/Delete con client_code**: Endpoints aceptan client_code como query param
-
-### Tests - Suite Comprehensiva
-
-- **191 nuevos tests** en `tests/test_comprehensive.py` (410 tests totales en 3 archivos)
-- Cobertura: Ingest API, Review API, Settings API, ClientManager, KB Repository, Chat Repository, Kanban Repository, Kanban API, Finance edge cases, E2E workflows, validacion de inputs, error handling
-- Tests E2E: ciclo de vida completo de tickets, gastos, facturas, chat, aislamiento multi-cliente
+- Added a comprehensive test suite covering ingest, review, settings, client management, KB repository, chat repository, Kanban, finance edge cases, E2E flows, input validation and error handling.
 
 ## v0.2.3 (2026-02-11)
 
-### Bugfix - Creacion de tickets Kanban
+### Kanban Bugfixes
 
-- **Error handling en frontend**: `createTicket()`, `saveTicket()` y `confirmDeleteTicket()` ahora verifican `resp.ok` y muestran errores al usuario en lugar de fallar silenciosamente
-- **Validacion robusta de cliente en backend**: `_get_kanban_repo_for_client` ahora valida el cliente via ClientManager, retorna errores claros y auto-crea directorios si faltan
+- Added frontend error handling for create, save and delete actions.
+- Hardened backend client validation for Kanban repositories.
 
 ## v0.2.2 (2026-02-11)
 
-### Kanban - Creacion de tickets
+### Kanban Ticket Creation
 
-- **Boton "+" por columna**: Cada cabecera de columna muestra un boton "+" (hover) para crear tickets directamente en esa columna
-- **Cliente obligatorio**: El modal de creacion exige seleccionar un cliente del dropdown antes de crear
-- **client_code en body**: El backend acepta `client_code` explicito en el body del POST, con fallback al cliente de sesion
-- **Validacion de cliente**: Si el client_code no existe, retorna 400
-- **Status vacio â†’ default**: Si status es cadena vacia, usa la primera columna como default
+- Added plus button per Kanban column.
+- Required client selection when creating tickets.
+- Allowed explicit `client_code` in ticket creation.
+- Added validation for invalid clients.
+- Added default status handling when status is empty.
 
 ### Tests
 
-- 82 tests (+5 nuevos): creacion con client_code explicito, fallback a sesion, cliente invalido, status explicito, status vacio
+- Added tests for explicit client creation, session fallback, invalid client, explicit status and empty status.
 
 ## v0.2.1 (2026-02-11)
 
-### Assistant - Scope & Token Gating
+### Assistant Scope and Retrieval
 
-- **Scope-aware retrieval**: 3 opciones explicitas: General (solo kb*standard), Cliente (solo kb*<CLIENT>), Cliente + Standard (ambas colecciones)
-- **Token gating**: Si la busqueda no devuelve items validos, NO se llama al modelo OpenAI (ahorro de tokens). Se muestra mensaje con sugerencias
-- **Validacion APPROVED**: Solo items con status APPROVED en SQLite son considerados validos tras la busqueda en Qdrant
-- **Flag model_called**: Cada respuesta incluye un flag de auditoria (0/1) indicando si se invoco al modelo
+- Added explicit scopes: General, Client, Client + Standard.
+- Added token gating when retrieval returns no usable context.
+- Added validation that only APPROVED SQLite items are used after Qdrant retrieval.
+- Added `model_called` audit flag.
+- Added KB type filter in chat.
+- Added deterministic ranking boost based on tags and SAP objects.
 
-### Assistant - Retrieval Enhancements
+### Chat History
 
-- **Filtro por tipo KB**: Selector en la UI para filtrar por tipo de item (Incident Pattern, Root Cause, Resolution, Verification Steps, Customizing, ABAP Tech Note, Glossary, Runbook)
-- **Ranking boost determinista**: Items cuyos tags o sap_objects coinciden con tokens de la pregunta reciben un boost de score (+0.05 por match)
+- Added persistent chat sessions.
+- Added sidebar search, pin, rename, export and delete.
+- Added configurable retention for old unpinned sessions.
 
-### Assistant - Chat History
+### API
 
-- **Sidebar de historial**: Panel lateral con listado de sesiones de chat, ordenadas por actividad reciente
-- **Sesiones persistentes**: Chats guardados en SQLite con mensajes, scope, cliente, timestamps
-- **Busqueda de historial**: Buscar sesiones por titulo o contenido de mensajes
-- **Pin de sesiones**: Fijar chats importantes para que no se eliminen con la retencion
-- **Renombrar sesiones**: Editar titulo de cualquier sesion desde el sidebar
-- **Exportar sesiones**: Exportar chat individual como Markdown o JSON
-- **Eliminar sesiones**: Borrar sesiones con confirmacion, cascade de mensajes
-- **Retencion configurable**: Limpieza automatica de sesiones antiguas no fijadas (7/15/30 dias). Se ejecuta al arrancar el servidor
-
-### API - Nuevos Endpoints
-
-| Metodo | Ruta                               | Descripcion                    |
-| ------ | ---------------------------------- | ------------------------------ |
-| GET    | `/api/chat/sessions`               | Listar sesiones (con busqueda) |
-| POST   | `/api/chat/sessions`               | Crear sesion                   |
-| GET    | `/api/chat/sessions/{id}/messages` | Mensajes de sesion             |
-| PUT    | `/api/chat/sessions/{id}/rename`   | Renombrar sesion               |
-| PUT    | `/api/chat/sessions/{id}/pin`      | Fijar/desfijar sesion          |
-| DELETE | `/api/chat/sessions/{id}`          | Eliminar sesion                |
-| GET    | `/api/chat/sessions/{id}/export`   | Exportar (md/json)             |
-| POST   | `/api/chat/retention`              | Configurar retencion           |
+- Added chat session endpoints for list, create, messages, rename, pin, delete, export and retention.
 
 ### Tests
 
-- 77 tests de integracion y E2E cubriendo: token gating, scope isolation, Qdrant routing, type filter, ranking boost, chat sessions, retention, search, pin, rename, export, API endpoints
+- Added integration and E2E tests for token gating, scope isolation, Qdrant routing, type filtering, ranking boost, chat sessions, retention, search, pin, rename, export and API endpoints.
 
 ## v0.2.0 (2026-02-10)
 
-### Visual
+### UI and Kanban
 
-- **Columnas adaptativas**: Las columnas Kanban se expanden para llenar el espacio disponible (min 260px, max 400px)
-- **Markdown en notas**: Las notas de los tickets se renderizan como Markdown (negritas, italicas, codigo) usando marked.js
-- **Sidebar colapsable**: El sidebar se puede colapsar a solo iconos con un boton. El estado se guarda en localStorage
-- **Drag-and-drop mejorado**: Las columnas destino se resaltan visualmente al arrastrar un ticket
-- **Empty states**: Las columnas vacias muestran "Sin tickets" en lugar de estar completamente vacias
-- **Responsive design**: Sidebar se convierte en menu hamburger en movil, paneles se apilan verticalmente
-- **Borde de prioridad**: Borde izquierdo de cada card coloreado segun prioridad (rojo=CRITICAL, naranja=HIGH, azul=MEDIUM, gris=LOW)
-- **Tailwind compilado**: Se reemplazo el CDN de Tailwind por CSS compilado (carga mas rapida, funciona offline)
-
-### Funcionalidad
-
-- **Eliminar tickets**: Boton "Eliminar" en el modal de detalle con confirmacion
-- **Filtrar por prioridad**: Selector de prioridad en la barra superior que filtra server-side
-- **Fechas relativas**: Cada card muestra "hace X dias" con la ultima modificacion. El modal muestra fecha de creacion y modificacion
-- **Contador de prioridad por columna**: Las cabeceras muestran badges con count de tickets CRITICAL y HIGH
-- **Exportar CSV**: Boton "Exportar CSV" descarga todos los tickets en formato CSV
-- **Busqueda global**: El buscador ahora busca en ID, titulo y notas (server-side, no en frontend)
-- **Tags editables**: El modal de detalle permite ver y editar tags (separados por coma)
-- **Links editables**: El modal de detalle permite ver y editar links asociados al ticket (uno por linea)
-- **Historial en el modal**: El modal de detalle muestra el historial completo de transiciones de estado
-- **Paginacion server-side**: La API soporta parametros `limit` y `offset` para paginacion
+- Added adaptive Kanban columns.
+- Added Markdown rendering in notes.
+- Added collapsible sidebar.
+- Improved drag-and-drop highlighting.
+- Added empty states.
+- Added responsive design.
+- Added priority border colors.
+- Replaced Tailwind CDN with compiled CSS.
+- Added ticket delete.
+- Added priority filter.
+- Added relative dates.
+- Added priority counters.
+- Added CSV export.
+- Added global search.
+- Added editable tags and links.
+- Added ticket history in modal.
+- Added server-side pagination.
 
 ### Backend
 
-- **Sesion persistente**: La secret key de sesion se genera una vez y se guarda en `data/.session_key`. Las sesiones sobreviven reinicios del servidor
-- **DELETE /api/kanban/tickets/{id}**: Nuevo endpoint para eliminar tickets
-- **GET /api/kanban/export-csv**: Nuevo endpoint que genera un CSV descargable
-- **Busqueda server-side**: `/api/kanban/tickets?search=X&priority=Y&limit=N&offset=M`
-- **Tags y links en PUT**: El endpoint de actualizar ticket ahora acepta `tags` y `links`
+- Added persistent session secret in `data/.session_key`.
+- Added delete ticket endpoint.
+- Added Kanban CSV export endpoint.
+- Added server-side search and pagination.
+- Added tag/link update support.
 
 ### Tests
 
-- 31 tests de integracion cubriendo: delete, search, pagination, priority filter, tags/links, export CSV, columns, history, session persistence
+- Added integration tests for delete, search, pagination, priority filter, tags/links, export CSV, columns, history and session persistence.
 
 ## v0.1.0
 
-- Release inicial con Kanban board, Assistant RAG, Review, Ingest, Settings
-- 8 columnas de estado con colores
-- Importacion masiva desde CSV
-- Chat con streaming SSE
-- Modo oscuro
+- Initial release with Kanban board, Assistant RAG, Review, Ingest and Settings.
+- Added eight colored Kanban status columns.
+- Added CSV bulk import.
+- Added streaming chat.
+- Added dark mode.

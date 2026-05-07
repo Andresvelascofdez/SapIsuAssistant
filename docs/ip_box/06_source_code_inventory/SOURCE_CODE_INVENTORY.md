@@ -13,6 +13,7 @@
 | Incidents | `src/incidents/storage/incident_repository.py` | Incident and evidence storage | IP evidence data model | High | Source/tests | Implemented |
 | Incidents | `src/web/routers/incidents.py` | Incident APIs and KB drafts | Delivery evidence workflow | High | Source/tests | Implemented |
 | IP Dossier | `src/incidents/pdf/ipbox_dossier.py` | Annual evidence PDF | Advisor evidence output | Medium | Source/tests | No tax calculation |
+| IP Dossier | `docs/ip_box/00_technical_ip_dossier/generate_technical_ip_dossier.py` | Product-level Technical IP Dossier PDF generation | Advisor product explanation | Medium | Source/PDF | Documentation generator |
 | Research | `src/research/agents/crawler.py` | Autonomous source crawler | Standard KB enrichment workflow | High | Source/tests | Implemented |
 | Research | `src/research/agents/orchestrator.py` | Agent orchestration | Multi-step knowledge pipeline | High | Source/tests | Implemented |
 | Research | `src/research/agents/topic_catalog.py` | SAP IS-U topic catalog | Curated expertise structure | High | Source/tests | Implemented |

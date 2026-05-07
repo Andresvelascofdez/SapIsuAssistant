@@ -4,6 +4,7 @@ This checklist is for preparing a factual advisor pack. Do not include invented 
 
 | Item | Status | Notes |
 | --- | --- | --- |
+| Technical IP dossier completed | Prepared | PDF and Markdown source under `00_technical_ip_dossier` |
 | Position paper completed | Prepared | Advisor validation required |
 | IP asset identified | Prepared | Ownership records TBC |
 | Architecture documented | Prepared | Feedback/accuracy UI marked planned |

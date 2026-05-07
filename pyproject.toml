@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sap-isu-assistant"
-version = "0.6.0"
+version = "0.6.1"
 description = "SAP IS-U Assistant with AI-powered knowledge base, incidents, IP Box evidence, finance and Kanban"
 requires-python = ">=3.11"
 dependencies = [
