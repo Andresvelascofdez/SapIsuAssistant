@@ -213,13 +213,13 @@ The launcher checks dependencies, starts Qdrant through Docker, starts the web s
 3. Configure the OpenAI API key:
 
    ```bash
-   set OPENAI_API_KEY=sk-...
+   set OPENAI_API_KEY=<your-openai-api-key>
    ```
 
    You can also store it in `.env`:
 
    ```bash
-   OPENAI_API_KEY=sk-...
+   OPENAI_API_KEY=<your-openai-api-key>
    ```
 
    Or configure it from the Settings page.

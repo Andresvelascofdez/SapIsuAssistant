@@ -42,7 +42,7 @@
   <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
     <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">OpenAI API Key</h2>
     <div class="flex gap-4">
-      <input x-model="apiKey" type="password" class="flex-1 border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm" placeholder="sk-...">
+      <input x-model="apiKey" type="password" class="flex-1 border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm" placeholder="OpenAI API key">
       <button @click="setApiKey()" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">Set</button>
     </div>
     <p x-show="apiKeyMsg" class="text-sm text-green-600 dark:text-green-400 mt-2" x-text="apiKeyMsg"></p>

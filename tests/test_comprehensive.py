@@ -363,7 +363,7 @@ class TestSettingsAPI:
         assert resp.status_code == 400
 
     def test_set_apikey(self, client):
-        resp = client.post("/api/settings/apikey", json={"key": "sk-test123"})
+        resp = client.post("/api/settings/apikey", json={"key": "test-openai-key"})
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
 
