@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+{% set active_tab = "ipbox/usage" %}
+{% block content %}
+<div x-data="ipboxUsageApp()" x-init="init()" class="max-w-6xl mx-auto space-y-6">
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <div class="flex flex-wrap items-start gap-3">
+      <div>
+        <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100">IP Box Usage Evidence</h2>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Review real usage records before advisor-facing monthly reports.</p>
+      </div>
+      <div class="flex-1"></div>
+      <a href="/ipbox/dossier" class="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition">
+        Annual dossier
+      </a>
+      <button @click="generateReport()" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+        Export monthly report
+      </button>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mt-5">
+      <input x-model="filters.month" @change="loadEvents()" type="month" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+      <select x-model="filters.client" @change="loadEvents()" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+        <option value="">All clients</option>
+        {% for c in clients %}
+        <option value="{{ c }}">{{ c }}</option>
+        {% endfor %}
+      </select>
+      <input x-model="filters.sap_module" @input.debounce.400ms="loadEvents()" placeholder="SAP module" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+      <input x-model="filters.sap_process" @input.debounce.400ms="loadEvents()" placeholder="SAP process" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+      <select x-model="filters.output_used" @change="loadEvents()" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+        <option value="">Output used: all</option>
+        <option value="YES">Yes</option>
+        <option value="PARTIAL">Partial</option>
+        <option value="NO">No</option>
+      </select>
+      <select x-model="filters.delivery_used" @change="loadEvents()" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+        <option value="">Delivery: all</option>
+        <option value="YES">Used for delivery</option>
+        <option value="NO">Not used for delivery</option>
+      </select>
+      <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+        <input type="checkbox" x-model="filters.include_excluded" @change="loadEvents()">
+        Show excluded
+      </label>
+      <button @click="loadEvents()" class="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition">
+        Refresh
+      </button>
+    </div>
+  </div>
+
+  <div x-show="message" class="rounded-lg px-4 py-3 text-sm"
+       :class="messageType === 'error' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'"
+       x-text="message"></div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div class="lg:col-span-1 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div class="px-4 py-3 border-b dark:border-gray-700 flex items-center gap-2">
+        <h3 class="font-semibold text-gray-900 dark:text-gray-100">Events</h3>
+        <span class="text-sm text-gray-500 dark:text-gray-400" x-text="count + ' found'"></span>
+      </div>
+      <div class="max-h-[34rem] overflow-y-auto divide-y dark:divide-gray-700">
+        <template x-for="event in events" :key="event.usage_id">
+          <button @click="selectEvent(event)" class="w-full text-left px-4 py-3 hover:bg-sap-50 dark:hover:bg-gray-700"
+                  :class="selected && selected.usage_id === event.usage_id ? 'bg-sap-50 dark:bg-sap-900/30 border-l-2 border-sap-600' : ''">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-semibold px-2 py-0.5 rounded"
+                    :class="event.manual_verification_status === 'discarded' ? 'bg-red-100 text-red-700' : event.manual_verification_status === 'used' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'"
+                    x-text="event.manual_verification_status || 'TODO/TBC'"></span>
+              <span class="text-xs text-gray-500" x-text="event.product_version || ''"></span>
+            </div>
+            <div class="text-sm font-medium text-gray-900 dark:text-gray-100 mt-1 truncate" x-text="event.task_type"></div>
+            <div class="text-xs text-gray-500 dark:text-gray-400 truncate" x-text="event.usage_id"></div>
+            <div class="text-xs text-gray-500 dark:text-gray-400" x-text="event.timestamp"></div>
+          </button>
+        </template>
+        <div x-show="events.length === 0" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">No usage evidence records for these filters.</div>
+      </div>
+    </div>
+
+    <div class="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <template x-if="!selected">
+        <div class="text-sm text-gray-500 dark:text-gray-400">Select a usage event to review it.</div>
+      </template>
+
+      <template x-if="selected">
+        <div class="space-y-5">
+          <div>
+            <div class="text-xs text-gray-500 dark:text-gray-400">Usage ID</div>
+            <div class="font-mono text-sm text-gray-900 dark:text-gray-100" x-text="selected.usage_id"></div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Manual verification</label>
+              <select x-model="edit.manual_verification_status" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+                <option value="TODO/TBC">TODO/TBC</option>
+                <option value="reviewed">Reviewed</option>
+                <option value="used">Used</option>
+                <option value="discarded">Discarded</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Output used</label>
+              <select x-model="edit.output_used" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+                <option value="NO">No</option>
+                <option value="PARTIAL">Partial</option>
+                <option value="YES">Yes</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Used for delivery</label>
+              <select x-model="edit.used_for_client_delivery" class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+                <option value="NO">No</option>
+                <option value="YES">Yes</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <input x-model="edit.ticket_reference" placeholder="Ticket/reference" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+            <input x-model="edit.sap_module" placeholder="SAP module" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+            <input x-model="edit.sap_process" placeholder="SAP process" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <input x-model.number="edit.estimated_time_without_tool_minutes" type="number" min="0" placeholder="Manual minutes without tool" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+            <input x-model.number="edit.actual_time_minutes" type="number" min="0" placeholder="Actual minutes" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+            <input x-model.number="edit.estimated_time_saved_minutes" type="number" min="0" placeholder="Estimated minutes saved" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <input x-model="edit.output_reference" placeholder="Output reference" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+            <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+              <input type="checkbox" x-model="excludeEvent">
+              Exclude from IP evidence
+            </label>
+          </div>
+
+          <textarea x-model="edit.notes" rows="4" placeholder="Review notes"
+                    class="w-full border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm"></textarea>
+
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs text-gray-600 dark:text-gray-300">
+            <div><strong>Namespace:</strong> <span x-text="selected.namespace_applied"></span></div>
+            <div><strong>Standard KB:</strong> <span x-text="selected.standard_kb_used"></span></div>
+            <div><strong>Client KB:</strong> <span x-text="selected.client_kb_used"></span></div>
+            <div><strong>Z/custom:</strong> <span x-text="selected.z_custom_objects_involved ? 'YES' : 'NO'"></span></div>
+            <div class="md:col-span-2"><strong>KB IDs:</strong> <span class="font-mono" x-text="selected.retrieved_kb_item_ids || '-'"></span></div>
+            <div class="md:col-span-2"><strong>Incident IDs:</strong> <span class="font-mono" x-text="selected.retrieved_incident_ids || '-'"></span></div>
+          </div>
+
+          <div class="flex flex-wrap gap-2">
+            <button @click="saveReview()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+              Save review
+            </button>
+            <button @click="quickStatus('used')" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+              Mark used
+            </button>
+            <button @click="quickStatus('discarded')" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+              Discard
+            </button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+</div>
+
+<script>
+function ipboxUsageApp() {
+  const now = new Date();
+  const month = now.toISOString().slice(0, 7);
+  return {
+    filters: {month, client: '', sap_module: '', sap_process: '', output_used: '', delivery_used: '', include_excluded: true},
+    events: [],
+    count: 0,
+    selected: null,
+    edit: {},
+    excludeEvent: false,
+    message: '',
+    messageType: 'success',
+
+    init() { this.loadEvents(); },
+    setMessage(text, type='success') {
+      this.message = text;
+      this.messageType = type;
+      setTimeout(() => this.message = '', 4500);
+    },
+    async loadEvents() {
+      const params = new URLSearchParams();
+      for (const [key, value] of Object.entries(this.filters)) {
+        if (value !== '' && value !== null && value !== undefined) params.set(key, value);
+      }
+      const resp = await fetch('/api/ipbox/usage-events?' + params.toString());
+      const data = await resp.json();
+      this.events = data.events || [];
+      this.count = data.count || 0;
+      if (this.selected) {
+        this.selected = this.events.find(e => e.usage_id === this.selected.usage_id) || null;
+        if (this.selected) this.selectEvent(this.selected);
+      }
+    },
+    selectEvent(event) {
+      this.selected = event;
+      this.edit = {
+        ticket_reference: event.ticket_reference || '',
+        sap_module: event.sap_module || '',
+        sap_process: event.sap_process || event.sap_isu_process || '',
+        output_used: event.output_used || 'NO',
+        used_for_client_delivery: event.used_for_client_delivery || event.delivery_used || 'NO',
+        manual_verification_status: event.manual_verification_status || 'TODO/TBC',
+        actual_time_minutes: event.actual_time_minutes || 0,
+        estimated_time_without_tool_minutes: event.estimated_time_without_tool_minutes || 0,
+        estimated_time_saved_minutes: event.estimated_time_saved_minutes || 0,
+        output_reference: event.output_reference || '',
+        notes: event.notes || '',
+      };
+      this.excludeEvent = event.excluded_from_ip_evidence === 'YES';
+    },
+    async saveReview() {
+      if (!this.selected) return;
+      const payload = Object.assign({}, this.edit, {
+        delivery_used: this.edit.used_for_client_delivery,
+        human_reviewed: this.edit.manual_verification_status === 'TODO/TBC' ? 'NO' : 'YES',
+        excluded_from_ip_evidence: this.excludeEvent ? 'YES' : 'NO',
+      });
+      const resp = await fetch('/api/ipbox/usage-events/' + this.selected.usage_id, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        this.setMessage(data.error || 'Could not save usage review.', 'error');
+        return;
+      }
+      this.selected = data;
+      this.setMessage('Usage evidence review saved.');
+      await this.loadEvents();
+    },
+    async quickStatus(status) {
+      this.edit.manual_verification_status = status;
+      this.edit.output_used = status === 'used' ? 'YES' : 'NO';
+      this.edit.used_for_client_delivery = status === 'used' ? 'YES' : 'NO';
+      this.excludeEvent = status === 'discarded';
+      await this.saveReview();
+    },
+    async generateReport() {
+      const resp = await fetch('/api/ipbox/monthly-report', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({month: this.filters.month}),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        this.setMessage(data.error || 'Could not generate monthly report.', 'error');
+        return;
+      }
+      this.setMessage('Monthly report generated.');
+      window.open('/api/ipbox/monthly-report/download?month=' + encodeURIComponent(this.filters.month), '_blank');
+    },
+  }
+}
+</script>
+{% endblock %}

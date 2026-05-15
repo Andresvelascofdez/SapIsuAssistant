@@ -20,7 +20,7 @@ This document describes software development challenges. It does not claim scien
 
 ## Challenge 3: AI + Knowledge Base + Incident Retrieval Workflow
 
-- Problem: external model ancliars without application-controlled SAP IS-U context are not enough for SAP IS-U consulting.
+- Problem: external model answers without application-controlled SAP IS-U context are not enough for SAP IS-U consulting.
 - Technical uncertainty: how to combine curated KB, incident evidence and AI-generated output.
 - Solution: RAG chat, KB review, incident KB draft generation and source audit panel.
 - Evidence: `src/assistant/chat/chat_service.py`, `src/web/routers/chat.py`, `src/web/routers/incidents.py`.
@@ -30,15 +30,15 @@ This document describes software development challenges. It does not claim scien
 
 - Problem: IP Box support requires evidence that the tool materially assisted work.
 - Technical uncertainty: which fields are sufficient without storing excessive confidential text.
-- Solution: usage log records hashes, ticket references, time estimates, output-used status and contribution factor.
-- Evidence: `src/ipbox/usage_logging.py`, `src/ipbox/reporting.py`.
-- Business value: enables monthly attribution reports.
+- Solution: usage log records hashes, product version, namespace, ticket references, retrieval IDs, time estimates, output-used status, manual verification status and contribution factor.
+- Evidence: `src/ipbox/usage_logging.py`, `src/ipbox/reporting.py`, `src/web/routers/ipbox.py`, `src/web/templates/ipbox_usage.html`.
+- Business value: enables reviewed monthly evidence reports for advisor assessment.
 
 ## Challenge 5: Accuracy Estimation and Feedback
 
 - Problem: AI output must be reviewed and validated.
 - Technical uncertainty: how to record usefulness and accuracy without overclaiming.
-- Current status: usage logs include optional `usefulness_rating` and `accuracy_score`; a full feedback UI is planned/TBC.
+- Current status: usage logs include optional `usefulness_rating` and `accuracy_score`; a full feedback/accuracy UI remains planned/TBC.
 - Evidence: `src/ipbox/usage_logging.py`.
 - Business value: supports advisor review and quality improvement once real data is collected.
 

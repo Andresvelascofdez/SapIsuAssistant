@@ -14,6 +14,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from src.shared.env_loader import load_env_file
 from src.shared.logging_config import configure_logging
+from src.shared.version import APP_VERSION
 
 load_env_file()
 
@@ -59,18 +60,19 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="SAP IS-U Assistant", version="0.6.2", lifespan=lifespan)
+app = FastAPI(title="SAP IS-U Assistant", version=APP_VERSION, lifespan=lifespan)
 app.add_middleware(SessionMiddleware, secret_key=_get_session_secret())
 app.mount("/static", StaticFiles(directory=_HERE / "static"), name="static")
 
 # Import and include routers
-from src.web.routers import settings, kanban, review, ingest, chat, finance, incidents, research  # noqa: E402
+from src.web.routers import settings, kanban, review, ingest, chat, finance, incidents, research, ipbox  # noqa: E402
 
 app.include_router(chat.router)
 app.include_router(ingest.router)
 app.include_router(review.router)
 app.include_router(kanban.router)
 app.include_router(incidents.router)
+app.include_router(ipbox.router)
 app.include_router(research.router)
 app.include_router(finance.router)
 app.include_router(settings.router)

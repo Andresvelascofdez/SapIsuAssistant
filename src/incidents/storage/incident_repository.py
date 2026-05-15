@@ -42,6 +42,10 @@ class Incident:
     reusable_knowledge: str | None
     ipbox_relevance: str
     linked_kb_ids_json: str
+    usage_event_ids_json: str
+    delivery_output_used: str
+    include_in_ip_evidence: str
+    verified_at: str | None
     created_at: str
     updated_at: str
 
@@ -130,11 +134,16 @@ class IncidentRepository:
                     reusable_knowledge TEXT,
                     ipbox_relevance TEXT NOT NULL,
                     linked_kb_ids_json TEXT NOT NULL DEFAULT '[]',
+                    usage_event_ids_json TEXT NOT NULL DEFAULT '[]',
+                    delivery_output_used TEXT NOT NULL DEFAULT 'NO',
+                    include_in_ip_evidence TEXT NOT NULL DEFAULT 'YES',
+                    verified_at TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
                 """
             )
+            self._ensure_incident_columns(conn)
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS incident_evidence (
@@ -167,6 +176,21 @@ class IncidentRepository:
                 "CREATE INDEX IF NOT EXISTS idx_evidence_incident ON incident_evidence(incident_id)"
             )
             conn.commit()
+
+    def _ensure_incident_columns(self, conn: sqlite3.Connection) -> None:
+        existing = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(incidents)").fetchall()
+        }
+        migrations = {
+            "usage_event_ids_json": "ALTER TABLE incidents ADD COLUMN usage_event_ids_json TEXT NOT NULL DEFAULT '[]'",
+            "delivery_output_used": "ALTER TABLE incidents ADD COLUMN delivery_output_used TEXT NOT NULL DEFAULT 'NO'",
+            "include_in_ip_evidence": "ALTER TABLE incidents ADD COLUMN include_in_ip_evidence TEXT NOT NULL DEFAULT 'YES'",
+            "verified_at": "ALTER TABLE incidents ADD COLUMN verified_at TEXT",
+        }
+        for column, sql in migrations.items():
+            if column not in existing:
+                conn.execute(sql)
 
     def _next_incident_code(self, conn: sqlite3.Connection, year: int) -> str:
         prefix = f"INC-{year}-"
@@ -204,6 +228,8 @@ class IncidentRepository:
         outcome: str | None = None,
         reusable_knowledge: str | None = None,
         ipbox_relevance: str = "UNCLEAR",
+        delivery_output_used: str = "NO",
+        include_in_ip_evidence: str = "YES",
     ) -> Incident:
         title = title.strip()
         client_code = client_code.strip().upper()
@@ -221,6 +247,8 @@ class IncidentRepository:
         status = _normalize_status(status, INCIDENT_STATUSES, "OPEN")
         priority = _normalize_status(priority, INCIDENT_PRIORITIES, "MEDIUM")
         ipbox_relevance = _normalize_status(ipbox_relevance, IPBOX_RELEVANCE, "UNCLEAR")
+        delivery_output_used = _normalize_status(delivery_output_used, {"YES", "NO"}, "NO")
+        include_in_ip_evidence = _normalize_status(include_in_ip_evidence, {"YES", "NO"}, "YES")
         incident_id = str(uuid.uuid4())
         timestamp = _now()
 
@@ -234,8 +262,9 @@ class IncidentRepository:
                     sap_objects_json, affected_ids_json, problem_statement,
                     technical_uncertainty, investigation, solution, implementation_notes,
                     verification, outcome, reusable_knowledge, ipbox_relevance,
-                    linked_kb_ids_json, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?)
+                    linked_kb_ids_json, usage_event_ids_json, delivery_output_used,
+                    include_in_ip_evidence, verified_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '[]', ?, ?, NULL, ?, ?)
                 """,
                 (
                     incident_id,
@@ -260,6 +289,8 @@ class IncidentRepository:
                     outcome,
                     reusable_knowledge,
                     ipbox_relevance,
+                    delivery_output_used,
+                    include_in_ip_evidence,
                     timestamp,
                     timestamp,
                 ),
@@ -279,7 +310,8 @@ class IncidentRepository:
                        sap_objects_json, affected_ids_json, problem_statement,
                        technical_uncertainty, investigation, solution, implementation_notes,
                        verification, outcome, reusable_knowledge, ipbox_relevance,
-                       linked_kb_ids_json, created_at, updated_at
+                       linked_kb_ids_json, usage_event_ids_json, delivery_output_used,
+                       include_in_ip_evidence, verified_at, created_at, updated_at
                 FROM incidents WHERE id = ?
                 """,
                 (incident_id,),
@@ -328,7 +360,8 @@ class IncidentRepository:
             "sap_objects_json, affected_ids_json, problem_statement, "
             "technical_uncertainty, investigation, solution, implementation_notes, "
             "verification, outcome, reusable_knowledge, ipbox_relevance, "
-            "linked_kb_ids_json, created_at, updated_at FROM incidents"
+            "linked_kb_ids_json, usage_event_ids_json, delivery_output_used, "
+            "include_in_ip_evidence, verified_at, created_at, updated_at FROM incidents"
             f"{where} ORDER BY period_year DESC, period_month DESC, updated_at DESC"
         )
         if limit is not None:
@@ -357,6 +390,9 @@ class IncidentRepository:
             "outcome",
             "reusable_knowledge",
             "ipbox_relevance",
+            "delivery_output_used",
+            "include_in_ip_evidence",
+            "verified_at",
         }
         updates = []
         params = []
@@ -371,6 +407,8 @@ class IncidentRepository:
                     value = _normalize_status(value, INCIDENT_PRIORITIES, "MEDIUM")
                 elif key == "ipbox_relevance":
                     value = _normalize_status(value, IPBOX_RELEVANCE, "UNCLEAR")
+                elif key in ("delivery_output_used", "include_in_ip_evidence"):
+                    value = _normalize_status(value, {"YES", "NO"}, "NO" if key == "delivery_output_used" else "YES")
                 elif key == "period_month":
                     if not 1 <= int(value) <= 12:
                         raise ValueError("period_month must be between 1 and 12.")
@@ -494,6 +532,24 @@ class IncidentRepository:
         if kb_id not in linked:
             linked.append(kb_id)
         return self.update_linked_kb_ids(incident_id, linked)
+
+    def link_usage_event(self, incident_id: str, usage_id: str) -> Optional[Incident]:
+        incident = self.get_incident(incident_id)
+        if not incident:
+            return None
+        linked = json.loads(incident.usage_event_ids_json or "[]")
+        if usage_id and usage_id not in linked:
+            linked.append(usage_id)
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE incidents SET usage_event_ids_json = ?, updated_at = ? WHERE id = ?",
+                (json.dumps(linked), _now(), incident_id),
+            )
+            conn.commit()
+        return self.get_incident(incident_id)
+
+    def mark_verified(self, incident_id: str) -> Optional[Incident]:
+        return self.update_incident(incident_id, verified_at=_now())
 
     def update_linked_kb_ids(self, incident_id: str, linked_kb_ids: list[str]) -> Optional[Incident]:
         with self._conn() as conn:

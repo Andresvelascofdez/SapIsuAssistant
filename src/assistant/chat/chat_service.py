@@ -14,14 +14,14 @@ from src.assistant.storage.models import KBItem
 from src.shared.errors import format_openai_error, format_qdrant_error
 from src.shared.tokens import count_tokens, truncate_to_token_limit
 
-ASSISTANT_SYSTEM_PROMPT = """You are an SAP IS-U technical assistant. Ancliar questions using ONLY the provided context.
+ASSISTANT_SYSTEM_PROMPT = """You are an SAP IS-U technical assistant. Answer questions using ONLY the provided context.
 
 Hard constraints:
 - Do not reference Kanban or operational tickets.
 - Do not assume facts not supported by the context provided.
 - If the context is insufficient, list what information is missing under "Missing inputs".
 - Be precise and technical. Reference SAP transactions, programs, and objects where relevant.
-- Structure your ancliars clearly with headings and steps where appropriate."""
+- Structure your answers clearly with headings and steps where appropriate."""
 
 # Reserve tokens for system prompt + question + response
 MAX_CONTEXT_TOKENS = 100_000
@@ -42,7 +42,7 @@ class ChatService:
     4. Apply deterministic ranking boost for tag/sap_object matches
     5. If no valid items found -> return immediately (skip GPT, save tokens)
     6. Build context pack (with token budget)
-    7. Call OpenAI for ancliar (gpt-5.2, reasoning effort high/xhigh)
+    7. Call OpenAI for answer (gpt-5.2, reasoning effort high/xhigh)
     """
 
     def __init__(
@@ -57,7 +57,7 @@ class ChatService:
         self.client = OpenAI(api_key=api_key) if api_key else OpenAI()
         self.model = model
 
-    def ancliar(
+    def answer(
         self,
         question: str,
         kb_repo: KBItemRepository,
@@ -68,7 +68,7 @@ class ChatService:
         type_filter: Optional[str] = None,
     ) -> "ChatResult":
         """
-        Ancliar a question using RAG with scope-aware retrieval and token gating.
+        Answer a question using RAG with scope-aware retrieval and token gating.
 
         Args:
             question: User question
@@ -80,7 +80,7 @@ class ChatService:
             type_filter: Optional KB item type filter
 
         Returns:
-            ChatResult with ancliar, sources, model_called flag, and used_kb_items
+            ChatResult with answer, sources, model_called flag, and used_kb_items
 
         Raises:
             ChatError: With actionable error message
@@ -107,7 +107,7 @@ class ChatService:
         # Token gating: skip GPT if no valid results
         if not source_items:
             return ChatResult(
-                ancliar=(
+                answer=(
                     "No se encontraron resultados relevantes en el alcance "
                     "seleccionado. No se ha realizado consulta al modelo para "
                     "ahorrar tokens.\n\n"
@@ -136,16 +136,18 @@ class ChatService:
             raise ChatError(format_openai_error(e)) from e
 
         sources = [item for item, _ in source_items]
+        source_scores = {item.kb_id: score for item, score in source_items}
         used_kb_items = [
             {"kb_id": item.kb_id, "title": item.title, "type": item.type}
             for item in sources
         ]
 
         return ChatResult(
-            ancliar=response.output_text,
+            answer=response.output_text,
             sources=sources,
             model_called=True,
             used_kb_items=used_kb_items,
+            source_scores=source_scores,
         )
 
     def _fetch_and_boost(
@@ -237,12 +239,14 @@ class ChatResult:
 
     def __init__(
         self,
-        ancliar: str,
+        answer: str,
         sources: list[KBItem],
         model_called: bool = False,
         used_kb_items: list[dict] | None = None,
+        source_scores: dict[str, float] | None = None,
     ):
-        self.ancliar = ancliar
+        self.answer = answer
         self.sources = sources
         self.model_called = model_called
         self.used_kb_items = used_kb_items or []
+        self.source_scores = source_scores or {}

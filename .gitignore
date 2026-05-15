@@ -39,6 +39,7 @@ htmlcov/
 
 # Data (MUST be excluded per PRACTICES.md)
 data/
+reports/ip_box/
 
 # Local documents / OCR fixtures (not part of source release)
 Facturas/
@@ -69,3 +70,5 @@ qdrant_storage/
 
 # Screenshots (local only)
 screenshots/
+!docs/ip_box/evidence/screenshots/
+!docs/ip_box/evidence/screenshots/**

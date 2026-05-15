@@ -258,7 +258,7 @@ Validation rules:
 - Top-K default: 8
 - Fetch the corresponding KB items from SQLite by `kb_id`
 
-### 10.2 Ancliar call (OpenAI)
+### 10.2 Answer call (OpenAI)
 - Model: `gpt-5.2`
 - Reasoning effort:
   - default `high`
@@ -356,7 +356,7 @@ Acceptance:
 ### M6 — Assistant Chat RAG
 - Embed question
 - Qdrant retrieval
-- Ancliar call with context pack
+- Answer call with context pack
 - Traceability shown in UI
 
 Acceptance:

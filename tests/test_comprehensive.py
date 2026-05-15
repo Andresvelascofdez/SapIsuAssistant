@@ -767,7 +767,7 @@ class TestChatRepositoryEdgeCases:
     def test_add_message_role_assistant(self, tmp_path):
         repo = ChatRepository(tmp_path / "chat.db")
         s = repo.create_session(scope="general")
-        msg = repo.add_message(s.session_id, role="assistant", content="Ancliar.")
+        msg = repo.add_message(s.session_id, role="assistant", content="Answer.")
         assert msg.role == "assistant"
 
     def test_add_message_with_kb_items_json(self, tmp_path):

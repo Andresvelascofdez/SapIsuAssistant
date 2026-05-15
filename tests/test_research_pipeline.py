@@ -3,6 +3,7 @@ import json
 
 from src.assistant.storage.kb_repository import KBItemRepository
 from src.assistant.storage.models import KBItemStatus, KBItemType
+from src.ipbox.usage_logging import read_usage_events
 from src.research.agents.topic_catalog import pick_catalog_topics
 from src.research.agents.workflow import CollectedDocument
 from src.research.agents.workflow import fetch_url_document, normalize_candidate, search_source_urls
@@ -266,6 +267,15 @@ def test_research_api_creates_and_promotes_standard_candidate(tmp_path, monkeypa
     assert sources["research_candidate_id"] == candidate["id"]
     assert sources["source_id"] == "sap-datasheet"
 
+    usage_events = read_usage_events(tmp_path)
+    assert any(
+        event["task_type"] == "RESEARCH_AGENT_KB_PROMOTION"
+        and event["namespace_applied"] == "STANDARD"
+        and event["standard_kb_used"] == "YES"
+        and event["client_kb_used"] == "NO"
+        for event in usage_events
+    )
+
 
 def test_review_bulk_approve_indexes_all_drafts(tmp_path, monkeypatch):
     import src.assistant.retrieval.kb_indexer as kb_indexer
@@ -315,6 +325,13 @@ def test_review_bulk_approve_indexes_all_drafts(tmp_path, monkeypatch):
     assert repo.get_by_id(first.kb_id).status == KBItemStatus.APPROVED.value
     assert repo.get_by_id(second.kb_id).status == KBItemStatus.APPROVED.value
     assert {item[0] for item in indexed} == {first.kb_id, second.kb_id}
+
+    retry_resp = client.post(
+        f"/api/review/items/{first.kb_id}/approve",
+        json={"scope": "standard", "title": first.title, "content_markdown": first.content_markdown},
+    )
+    assert retry_resp.status_code == 400
+    assert "Only DRAFT" in retry_resp.json()["error"]
 
 
 def test_research_api_runs_agents_and_creates_kb_drafts(tmp_path, monkeypatch):
@@ -370,6 +387,35 @@ def test_research_api_runs_agents_and_creates_kb_drafts(tmp_path, monkeypatch):
 
     items = client.get("/api/review/items?scope=standard&status=DRAFT").json()
     assert any(item["type"] == KBItemType.SAP_TABLE.value and "EABL" in item["sap_objects"] for item in items)
+
+
+def test_automatic_research_runs_are_forced_to_standard_scope(tmp_path, monkeypatch):
+    import src.research.agents.orchestrator as orchestrator
+
+    monkeypatch.setattr(orchestrator, "search_source_urls", lambda *args, **kwargs: [])
+    client = _client(tmp_path, monkeypatch)
+
+    resp = client.post(
+        "/api/research/runs",
+        json={
+            "scope": "client",
+            "topic": "SAP IS-U business partner contract account FKKVKP",
+            "source_ids": ["sap-datasheet"],
+            "max_results_per_source": 1,
+            "auto_promote": True,
+        },
+    )
+
+    assert resp.status_code == 202
+    run_id = resp.json()["id"]
+    run = client.get(f"/api/research/runs/{run_id}").json()
+    assert run["client_scope"] == "standard"
+    assert run["client_code"] is None
+
+    standard_repo = KBItemRepository(tmp_path / "standard" / "assistant_kb.sqlite")
+    client_repo = KBItemRepository(tmp_path / "clients" / "TST" / "assistant_kb.sqlite")
+    assert standard_repo.list_by_scope("standard")
+    assert client_repo.list_by_scope("client", client_code="TST") == []
 
 
 def test_autonomous_crawler_discovers_topics_and_queues_runs(tmp_path, monkeypatch):

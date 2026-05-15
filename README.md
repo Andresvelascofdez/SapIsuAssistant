@@ -98,6 +98,8 @@ The tool is implemented as company-developed internal software with an external 
 - Position paper, IP asset identification, architecture, R&D/development report, source inventory, third-party IP boundary, KB provenance, internal operating procedure, usage logging specification, ticket-level evidence templates, monthly report template, economic attribution methodology, service-line definition, revenue mapping, TP/valuation input, productivity benchmark, QA evidence, data protection controls, user/developer guides, roadmap and advisor pack index.
 - Modular backend usage logging in `src/ipbox/usage_logging.py`.
 - Monthly usage reporting and CSV export in `src/ipbox/reporting.py`.
+- IP evidence review UI at `/ipbox/usage` for real recorded usage events.
+- Automatic usage evidence logging for priority workflows: RAG chat, incident registration, incident-to-KB, KB approval/indexing, research-agent promotion/indexing and dossier generation.
 - Revenue mapping template in `reports/templates/revenue_mapping_template.csv`.
 - Factual evidence stance:
   - Do not invent commits, dates, screenshots, usage logs, hours, tickets or client evidence.
@@ -161,6 +163,7 @@ FastAPI Routers
     |       +-- KB draft promotion and indexing
     |
     +-- IP Box Evidence
+    |       +-- Usage evidence review UI
     |       +-- JSONL usage logs
     |       +-- Monthly Markdown/CSV reports
     |
@@ -362,6 +365,7 @@ Standard KB and client-specific KB are separate. Client incidents and uploaded e
 | GET | `/incidents` | Incident list |
 | GET | `/incidents/{id}` | Incident detail |
 | GET | `/ipbox/dossier` | Annual dossier page |
+| GET | `/ipbox/usage` | Monthly usage evidence review |
 | GET | `/api/incidents` | List incidents |
 | POST | `/api/incidents` | Create incident |
 | GET | `/api/incidents/{id}` | Get incident |
@@ -370,7 +374,13 @@ Standard KB and client-specific KB are separate. Client incidents and uploaded e
 | POST | `/api/incidents/{id}/evidence` | Add evidence |
 | DELETE | `/api/incidents/{id}/evidence/{evidence_id}` | Delete evidence |
 | POST | `/api/incidents/{id}/generate-kb-draft` | Create KB draft |
+| POST | `/api/incidents/{id}/link-usage-event` | Link usage evidence |
+| POST | `/api/incidents/{id}/mark-verified` | Mark incident as verified |
 | GET | `/api/ipbox/dossier?year=YYYY` | Download annual PDF |
+| GET | `/api/ipbox/usage-events` | List/filter usage events |
+| PUT | `/api/ipbox/usage-events/{usage_id}` | Review/update usage event metadata |
+| POST | `/api/ipbox/monthly-report` | Generate monthly evidence report |
+| GET | `/api/ipbox/monthly-report/download` | Download monthly Markdown/CSV report |
 
 ### Kanban
 
@@ -405,7 +415,17 @@ For the curated catalog, use `Run Full Catalog`. Existing KB items are deduplica
 
 ## IP Box Evidence Usage Logging
 
-The backend usage logger writes JSONL events:
+The application records hashed usage metadata for the priority workflows listed above. Raw prompts/responses are not stored by default; query and response hashes plus retrieval metadata are stored instead.
+
+Review events from the UI:
+
+1. Open `http://localhost:8000/ipbox/usage`.
+2. Filter by month, client, SAP module/process, output use or delivery use.
+3. Mark events as `reviewed`, `used` or `discarded`.
+4. Add ticket/reference, notes and optional time estimates.
+5. Export the monthly Markdown/CSV report.
+
+Manual logging is also available for controlled internal workflows:
 
 ```python
 from pathlib import Path
@@ -414,23 +434,18 @@ from src.ipbox.usage_logging import create_usage_record, save_usage_event
 record = create_usage_record(
     user="consultant",
     active_client="CLIENT_A",
-    ticket_reference="TCK000001",
-    task_type="incident_analysis",
+    ticket_reference="TCKXXXXX",
+    task_type="RAG_CHAT",
     sap_module="IS-U",
     sap_isu_process="meter-reading",
     search_mode="COMBINED",
     sources_used="BOTH",
-    output_used="YES",
-    used_for_client_delivery="YES",
-    actual_time_minutes=45,
-    estimated_time_without_tool_minutes=90,
-    estimated_time_saved_minutes=45,
-    software_contribution_factor=0.7,
+    manual_verification_status="TODO/TBC",
 )
 save_usage_event(Path("data"), record)
 ```
 
-Generate a monthly report:
+Generate a monthly report from reviewed real logs:
 
 ```python
 from pathlib import Path
@@ -440,9 +455,6 @@ generate_monthly_ip_report(
     Path("data"),
     Path("reports"),
     "2026-05",
-    total_relevant_sap_isu_service_revenue=10000,
-    total_productive_sap_isu_hours=80,
-    qualifying_service_factor=0.98,
 )
 ```
 
@@ -471,6 +483,7 @@ Focused tests:
 pytest -q tests/test_research_pipeline.py
 pytest -q tests/test_ipbox_usage_reporting.py
 pytest -q tests/test_incidents.py
+pytest -q tests/test_ui_controls.py
 ```
 
 Some finance/OCR tests are slower because they exercise OCR-heavy paths.

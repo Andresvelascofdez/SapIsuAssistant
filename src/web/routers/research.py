@@ -569,6 +569,46 @@ async def promote_candidate(candidate_id: str, request: Request):
         return JSONResponse({"error": "Candidate scope does not match the requested scope."}, status_code=400)
 
     item = promote_candidate_to_kb_draft(candidate, repo, deps.get_client_manager())
+    usage_id = None
+    try:
+        from src.ipbox.usage_logging import create_usage_record, detect_custom_sap_objects, save_usage_event
+
+        sap_objects = json.loads(candidate.sap_objects_json or "[]")
+        is_standard = candidate.client_scope == "standard"
+        record = create_usage_record(
+            user="local-user",
+            active_client="" if is_standard else (candidate.client_code or ""),
+            selected_scope=candidate.client_scope,
+            selected_mode="manual_candidate_promotion",
+            ticket_reference=f"RESEARCH-{candidate.id}",
+            task_type="RESEARCH_AGENT_KB_PROMOTION",
+            sap_module="",
+            sap_isu_process="",
+            search_mode="AI_ONLY",
+            sources_used="KNOWLEDGE_BASE",
+            query_text=f"{candidate.title}\n{candidate.source_name}",
+            response_text=item.kb_id,
+            retrieved_kb_item_ids=item.kb_id,
+            retrieval_count=1,
+            number_of_documents_retrieved=1,
+            namespace_applied="STANDARD" if is_standard else f"CLIENT:{candidate.client_code}",
+            standard_kb_used="YES" if is_standard else "NO",
+            client_kb_used="NO" if is_standard else "YES",
+            contains_z_objects=detect_custom_sap_objects(sap_objects),
+            z_custom_objects_involved=detect_custom_sap_objects(sap_objects),
+            output_used="NO",
+            used_for_client_delivery="NO",
+            delivery_used="NO",
+            human_reviewed="YES" if candidate.audit_status == "PASSED" else "NO",
+            manual_verification_status="reviewed" if candidate.audit_status == "PASSED" else "TODO/TBC",
+            software_feature_used="research agent",
+            software_features_used="research agent;review/approval/indexing controls;namespace filtering",
+            extra={"research_candidate_id": candidate.id},
+        )
+        save_usage_event(deps.DATA_ROOT, record)
+        usage_id = record.usage_id
+    except Exception as error:
+        log.warning("Failed to write research usage evidence event: %s", error)
     updated = repo.get_candidate(candidate_id)
     return {
         "candidate": _candidate_to_dict(updated),
@@ -578,6 +618,7 @@ async def promote_candidate(candidate_id: str, request: Request):
             "type": item.type,
             "status": item.status,
         },
+        "usage_event_id": usage_id,
     }
 
 

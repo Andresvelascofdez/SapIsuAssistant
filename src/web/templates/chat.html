@@ -107,6 +107,12 @@
           <option value="high">High</option>
           <option value="xhigh">X-High</option>
         </select>
+        <input x-model="ticketReference" placeholder="Ticket/ref (optional)"
+               class="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-2 py-1 text-xs">
+        <input x-model="sapModule" placeholder="SAP module"
+               class="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-2 py-1 text-xs">
+        <input x-model="sapProcess" placeholder="SAP process"
+               class="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-2 py-1 text-xs">
       </div>
       <div class="flex gap-3">
         <input x-model="question" @keydown.enter="send()"
@@ -132,7 +138,7 @@
         <span x-text="lastModelCalled ? 'Model was called' : 'Model NOT called (no results)'"></span>
       </div>
       <template x-if="sources.length === 0">
-        <p class="text-xs text-gray-400 dark:text-gray-500 italic">Sources will appear here after a question is ancliared.</p>
+        <p class="text-xs text-gray-400 dark:text-gray-500 italic">Sources will appear here after a question is answered.</p>
       </template>
       <template x-for="(src, i) in sources" :key="i">
         <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3">
@@ -171,6 +177,9 @@ function chatApp() {
     effort: 'high',
     scope: '{{ "client" if active_client else "general" }}',
     typeFilter: '',
+    ticketReference: '',
+    sapModule: '',
+    sapProcess: '',
     thinking: false,
     activeSessionId: null,
     historySearch: '',
@@ -250,6 +259,9 @@ function chatApp() {
             scope: this.scope,
             type_filter: this.typeFilter || null,
             session_id: this.activeSessionId,
+            ticket_reference: this.ticketReference,
+            sap_module: this.sapModule,
+            sap_process: this.sapProcess,
           }),
         });
         const reader = resp.body.getReader();
@@ -271,14 +283,21 @@ function chatApp() {
               if (!raw) continue;
               try {
                 const data = JSON.parse(raw);
-                if (this._lastEvent === 'ancliar') {
+                if (this._lastEvent === 'answer') {
                   this.messages.push({
                     role: 'assistant',
-                    text: data.ancliar,
+                    text: data.answer,
                     model_called: data.model_called,
                   });
                   this.sources = data.sources || [];
                   this.lastModelCalled = data.model_called;
+                  if (data.usage_id) {
+                    this.messages.push({
+                      role: 'assistant',
+                      text: 'Usage evidence recorded: ' + data.usage_id,
+                      model_called: undefined,
+                    });
+                  }
                 } else if (this._lastEvent === 'error') {
                   this.messages.push({role: 'assistant', text: data.message});
                 }

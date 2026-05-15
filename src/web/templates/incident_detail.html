@@ -15,6 +15,11 @@
             :disabled="!incident.id || generatingKb">
       Generate KB Draft
     </button>
+    <button @click="markVerified()"
+            class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+            :disabled="!incident.id">
+      Mark as verified
+    </button>
   </div>
 
   <div x-show="message" class="rounded-lg px-4 py-3 text-sm"
@@ -100,6 +105,27 @@
             </div>
           </div>
 
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div>
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Delivery output used</label>
+              <select x-model="incident.delivery_output_used" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+                <option value="NO">No</option>
+                <option value="YES">Yes</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Annual evidence dossier</label>
+              <select x-model="incident.include_in_ip_evidence" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+                <option value="YES">Include</option>
+                <option value="NO">Exclude</option>
+              </select>
+            </div>
+            <div class="md:col-span-2">
+              <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Verified at</label>
+              <input :value="incident.verified_at || 'TODO/TBC'" readonly class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+            </div>
+          </div>
+
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Objetos SAP</label>
@@ -173,6 +199,25 @@
           </template>
         </div>
       </div>
+
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Usage evidence links</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+          <input x-model="usageEventToLink" placeholder="Usage event ID" class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+          <button @click="linkUsageEvent()" class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+            Link usage event
+          </button>
+          <button @click="window.location.href='/ipbox/usage'" class="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition">
+            Open usage review
+          </button>
+        </div>
+        <div x-show="(incident.usage_event_ids || []).length === 0" class="text-sm text-gray-500 dark:text-gray-400">No usage events linked yet.</div>
+        <div class="flex flex-wrap gap-2">
+          <template x-for="usageId in incident.usage_event_ids || []" :key="usageId">
+            <span class="text-xs font-mono px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300" x-text="usageId"></span>
+          </template>
+        </div>
+      </div>
     </div>
   </template>
 </div>
@@ -189,6 +234,7 @@ function incidentDetailApp() {
     message: '',
     messageType: 'success',
     generatingKb: false,
+    usageEventToLink: '',
     evidenceForm: {title: '', kind: 'FILE', url: '', notes: ''},
     narrativeFields: [
       {key: 'problem_statement', label: 'Problem statement'},
@@ -236,6 +282,9 @@ function incidentDetailApp() {
       payload.affected_ids = this.parseCsv(this.affectedIdsText);
       delete payload.evidence;
       delete payload.evidence_count;
+      delete payload.usage_event_ids;
+      delete payload.linked_kb_ids;
+      delete payload.verified_at;
       delete payload.created_at;
       delete payload.updated_at;
       delete payload.incident_code;
@@ -324,7 +373,42 @@ function incidentDetailApp() {
         return;
       }
       await this.loadIncident();
-      this.setMessage('KB draft generado: ' + data.kb_id);
+      this.setMessage('KB draft generado: ' + data.kb_id + (data.usage_event_id ? ' | Usage: ' + data.usage_event_id : ''));
+    },
+
+    async linkUsageEvent() {
+      if (!this.usageEventToLink.trim()) {
+        this.setMessage('Introduce un usage event ID.', 'error');
+        return;
+      }
+      const resp = await fetch('/api/incidents/' + this.incidentId + '/link-usage-event', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({client_code: this.clientCode, usage_id: this.usageEventToLink.trim()}),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        this.setMessage(data.error || 'No se pudo vincular el usage event.', 'error');
+        return;
+      }
+      this.incident = Object.assign({}, this.incident, data);
+      this.usageEventToLink = '';
+      this.setMessage('Usage event vinculado.');
+    },
+
+    async markVerified() {
+      const resp = await fetch('/api/incidents/' + this.incidentId + '/mark-verified', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({client_code: this.clientCode}),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        this.setMessage(data.error || 'No se pudo marcar como verificada.', 'error');
+        return;
+      }
+      this.incident = Object.assign({}, this.incident, data);
+      this.setMessage('Incidencia marcada como verificada.' + (data.usage_event_id ? ' Usage: ' + data.usage_event_id : ''));
     },
 
     async deleteIncident() {

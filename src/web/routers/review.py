@@ -51,6 +51,50 @@ def _format_indexing_error(error: Exception) -> str:
         return str(error)
 
 
+def _log_kb_review_usage(request: Request, item, action: str, indexing_error: str | None = None) -> str | None:
+    """Record hashed usage evidence for KB governance actions."""
+    try:
+        from src.ipbox.usage_logging import create_usage_record, detect_custom_sap_objects, save_usage_event
+
+        state = get_state(request)
+        sap_objects = json.loads(item.sap_objects_json or "[]")
+        record = create_usage_record(
+            user="local-user",
+            active_client=item.client_code or state.active_client_code or "",
+            selected_scope=item.client_scope,
+            selected_mode=action,
+            ticket_reference=f"KB-{item.kb_id}",
+            task_type="KB_REVIEW_INDEXING",
+            sap_module="",
+            sap_isu_process="",
+            search_mode="AI_ONLY",
+            sources_used="KNOWLEDGE_BASE",
+            query_text=f"{item.title}\n{item.type}",
+            response_text=f"{action}:{item.status}",
+            retrieved_kb_item_ids=item.kb_id,
+            retrieval_count=1,
+            number_of_documents_retrieved=1,
+            namespace_applied="STANDARD" if item.client_scope == "standard" else f"CLIENT:{item.client_code}",
+            standard_kb_used="YES" if item.client_scope == "standard" else "NO",
+            client_kb_used="YES" if item.client_scope == "client" else "NO",
+            contains_z_objects=detect_custom_sap_objects(sap_objects),
+            z_custom_objects_involved=detect_custom_sap_objects(sap_objects),
+            output_used="NO",
+            used_for_client_delivery="NO",
+            delivery_used="NO",
+            human_reviewed="YES",
+            manual_verification_status="reviewed",
+            software_feature_used="namespace filtering",
+            software_features_used="review/approval/indexing controls;namespace filtering",
+            notes=indexing_error or "",
+        )
+        save_usage_event(state.data_root, record)
+        return record.usage_id
+    except Exception as error:
+        log.warning("Failed to write KB review usage evidence event: %s", error)
+        return None
+
+
 @router.get("/review")
 async def review_page(request: Request):
     ctx = get_template_context(request)
@@ -95,6 +139,15 @@ async def approve_item(kb_id: str, request: Request):
     if not repo:
         return JSONResponse({"error": "No client selected."}, status_code=400)
 
+    existing = repo.get_by_id(kb_id)
+    if not existing:
+        return JSONResponse({"error": "Item not found."}, status_code=404)
+    if existing.status != KBItemStatus.DRAFT.value:
+        return JSONResponse(
+            {"error": "Only DRAFT items can be approved and indexed. Reject remains available."},
+            status_code=400,
+        )
+
     # Persist edits before approve
     repo.update_fields(
         kb_id,
@@ -118,6 +171,9 @@ async def approve_item(kb_id: str, request: Request):
         indexing_error = _format_indexing_error(e)
 
     result = _item_to_dict(updated)
+    usage_id = _log_kb_review_usage(request, updated, "approve_and_index", indexing_error)
+    if usage_id:
+        result["usage_event_id"] = usage_id
     if indexing_error:
         result["indexing_warning"] = indexing_error
     return result
@@ -145,7 +201,11 @@ async def bulk_approve_items(request: Request):
         updated = repo.update_status(draft.kb_id, KBItemStatus.APPROVED)
         try:
             index_approved_kb_item(updated, api_key=api_key, qdrant_url=state.qdrant_url)
-            approved.append(_item_to_dict(updated))
+            usage_id = _log_kb_review_usage(request, updated, "bulk_approve_and_index")
+            item_data = _item_to_dict(updated)
+            if usage_id:
+                item_data["usage_event_id"] = usage_id
+            approved.append(item_data)
         except Exception as e:
             log.exception("Bulk approve indexing error for %s", draft.kb_id)
             repo.update_status(draft.kb_id, KBItemStatus.DRAFT)
@@ -192,6 +252,9 @@ async def reject_item(kb_id: str, request: Request):
     repo.update_status(kb_id, KBItemStatus.REJECTED)
     item = repo.get_by_id(kb_id)
     result = _item_to_dict(item)
+    usage_id = _log_kb_review_usage(request, item, "reject", deletion_warning)
+    if usage_id:
+        result["usage_event_id"] = usage_id
     if deletion_warning:
         result["deletion_warning"] = deletion_warning
     return result

@@ -157,6 +157,13 @@ def run_research_pipeline(
                     repo.add_run_event(run_id, agent="Ingestor", level="WARNING", message=f"Candidate not promoted: {candidate.title}")
                     continue
                 item = promote_candidate_to_kb_draft(candidate, repo, cm)
+                _log_research_usage(
+                    data_root=data_root,
+                    candidate=candidate,
+                    kb_id=item.kb_id,
+                    action="promote_candidate_to_kb_draft",
+                    indexed=False,
+                )
                 promoted_items.append((candidate, item))
                 promoted += 1
                 repo.add_run_event(
@@ -202,6 +209,13 @@ def run_research_pipeline(
                         )
                         continue
                     indexed += 1
+                    _log_research_usage(
+                        data_root=data_root,
+                        candidate=candidate,
+                        kb_id=indexed_item.kb_id,
+                        action="auto_approve_and_index",
+                        indexed=True,
+                    )
                     repo.add_run_event(
                         run_id,
                         agent="Indexer",
@@ -319,3 +333,56 @@ def _short_error(error: Exception) -> str:
     if "HTTP ERROR 429" in upper or "TOO MANY REQUESTS" in upper:
         return "Source rate limit reached."
     return message[:220]
+
+
+def _log_research_usage(
+    *,
+    data_root: Path,
+    candidate: KBCandidate,
+    kb_id: str,
+    action: str,
+    indexed: bool,
+) -> None:
+    """Record hashed usage evidence for Standard KB research-agent promotions."""
+    try:
+        from src.ipbox.usage_logging import create_usage_record, detect_custom_sap_objects, save_usage_event
+
+        sap_objects = json.loads(candidate.sap_objects_json or "[]")
+        record = create_usage_record(
+            user="local-user",
+            active_client="",
+            selected_scope="standard",
+            selected_mode=action,
+            ticket_reference=f"RESEARCH-{candidate.id}",
+            task_type="RESEARCH_AGENT_KB_PROMOTION",
+            sap_module="",
+            sap_isu_process="",
+            search_mode="AI_ONLY",
+            sources_used="KNOWLEDGE_BASE",
+            query_text=f"{candidate.title}\n{candidate.source_name}",
+            response_text=f"{action}:{kb_id}:{'indexed' if indexed else 'draft'}",
+            retrieved_kb_item_ids=kb_id,
+            retrieval_count=1,
+            number_of_documents_retrieved=1,
+            namespace_applied="STANDARD",
+            standard_kb_used="YES",
+            client_kb_used="NO",
+            contains_z_objects=detect_custom_sap_objects(sap_objects),
+            z_custom_objects_involved=detect_custom_sap_objects(sap_objects),
+            output_used="NO",
+            used_for_client_delivery="NO",
+            delivery_used="NO",
+            human_reviewed="YES" if candidate.audit_status == "PASSED" else "NO",
+            manual_verification_status="reviewed" if candidate.audit_status == "PASSED" else "TODO/TBC",
+            software_feature_used="research agent",
+            software_features_used="research agent;review/approval/indexing controls;namespace filtering",
+            extra={
+                "research_candidate_id": candidate.id,
+                "source_id": candidate.source_id,
+                "audit_status": candidate.audit_status,
+                "copyright_risk": candidate.copyright_risk,
+            },
+        )
+        save_usage_event(data_root, record)
+    except Exception:
+        pass

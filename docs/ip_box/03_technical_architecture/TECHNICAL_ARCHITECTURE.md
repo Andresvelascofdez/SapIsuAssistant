@@ -11,10 +11,12 @@ flowchart LR
   Routers --> Kanban[Kanban SQLite]
   Routers --> Research[Research Agents]
   Routers --> Usage[IP Box Usage Logs]
+  Routers --> UsageUI[IP Evidence Review UI]
   Research --> KB
   KB --> Qdrant[Qdrant Vector Index]
   Chat[Chat/RAG Service] --> Qdrant
   Chat --> OpenAI[OpenAI API]
+  UsageUI --> Usage
   Usage --> Reports[Monthly IP Box Reports]
   Incidents --> Dossier[Annual IP Box PDF]
 ```
@@ -29,13 +31,14 @@ flowchart LR
 - Incident Registration: client-isolated incident SQLite databases.
 - Evidence Attachments: file/link/note evidence with SHA256 for files.
 - Research Agent Pipeline: Topic Scout, Collector, Normalizer, Auditor, Ingestor, Indexer.
+- Usage Evidence Review: `/ipbox/usage` review UI, usage-event API and monthly report export.
 - Export/Reporting: annual incident PDF dossier and monthly IP Box usage report module.
 
 ## Partially Implemented or Planned
 
 - Feedback Engine: not implemented as a formal scoring workflow; advisor documentation treats it as planned/TBC.
 - Accuracy Scoring Engine: not implemented as a formal module; usage logs include optional `accuracy_score`.
-- UI Usage Logging: backend module exists; UI integration remains a planned step.
+- Wider workflow coverage: priority workflows are usage-logged; future delivery workflows should be instrumented before being relied upon for evidence.
 
 ## Query Flow
 
@@ -43,8 +46,8 @@ flowchart LR
 2. User asks a SAP IS-U question.
 3. The question is embedded.
 4. Qdrant retrieves permitted KB items.
-5. Chat service builds an ancliar with source/audit information.
-6. Optional usage logging records the query hash, response hash, retrieval counts and contribution fields.
+5. Chat service builds an answer with source/audit information.
+6. Usage logging records hashes, retrieval counts, namespace metadata and contribution/review fields for later evidence review.
 
 ## Incident Flow
 

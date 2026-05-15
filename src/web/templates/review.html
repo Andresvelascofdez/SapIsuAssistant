@@ -80,7 +80,7 @@
                     class="flex-1 border dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-mono resize-none bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
         </div>
         <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex gap-3">
-          <button @click="approve()" :disabled="processing"
+          <button x-show="selected.status === 'DRAFT'" @click="approve()" :disabled="processing"
                   class="bg-green-600 hover:bg-green-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white px-6 py-2 rounded-lg text-sm font-medium transition">
             Approve & Index
           </button>

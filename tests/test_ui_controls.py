@@ -36,3 +36,15 @@ def test_incidents_page_has_explicit_search_controls(tmp_path, monkeypatch):
     assert resp.status_code == 200
     assert "Buscar" in resp.text
     assert "Limpiar" in resp.text
+
+
+def test_review_pages_hide_approve_action_for_non_draft_items(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+
+    review_resp = client.get("/review")
+    ingest_resp = client.get("/ingest")
+
+    assert review_resp.status_code == 200
+    assert ingest_resp.status_code == 200
+    assert "x-show=\"selected.status === 'DRAFT'\"" in review_resp.text
+    assert "x-show=\"selectedReviewItem.status === 'DRAFT'\"" in ingest_resp.text

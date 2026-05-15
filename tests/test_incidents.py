@@ -8,6 +8,7 @@ from pypdf import PdfReader
 from src.assistant.storage.kb_repository import KBItemRepository
 from src.incidents.pdf.ipbox_dossier import generate_ipbox_dossier_pdf
 from src.incidents.storage.incident_repository import IncidentRepository, compute_sha256
+from src.ipbox.usage_logging import read_usage_events
 from src.shared.client_manager import ClientManager
 
 
@@ -53,6 +54,8 @@ class TestIncidentRepository:
 
         assert incident.client_code == "TST"
         assert incident.incident_code == "INC-2026-0001"
+        assert incident.delivery_output_used == "NO"
+        assert incident.include_in_ip_evidence == "YES"
         assert repo.year_summary(2026)["total_hours"] == 6.5
 
         updated = repo.update_incident(
@@ -60,9 +63,13 @@ class TestIncidentRepository:
             status="RESOLVED",
             hours_spent=7.25,
             solution="Adjusted validation and regenerated device links.",
+            delivery_output_used="YES",
+            include_in_ip_evidence="NO",
         )
         assert updated.status == "RESOLVED"
         assert updated.hours_spent == 7.25
+        assert updated.delivery_output_used == "YES"
+        assert updated.include_in_ip_evidence == "NO"
 
         payload = b"sap isu evidence"
         evidence = repo.add_evidence(
@@ -76,6 +83,12 @@ class TestIncidentRepository:
         )
         assert evidence.sha256 == hashlib.sha256(payload).hexdigest()
         assert len(repo.list_evidence(incident.id)) == 1
+
+        linked = repo.link_usage_event(incident.id, "USE-20260515120000-ABCDEF1234")
+        assert "USE-20260515120000-ABCDEF1234" in linked.usage_event_ids_json
+
+        verified = repo.mark_verified(incident.id)
+        assert verified.verified_at
 
     def test_validation_errors(self, tmp_path):
         repo = IncidentRepository(tmp_path / "incidents.sqlite")
@@ -154,6 +167,7 @@ class TestIncidentAPI:
         )
         assert resp.status_code == 200
         incident_id = resp.json()["id"]
+        assert resp.json()["usage_event_id"].startswith("USE-")
 
         client.post(
             "/api/incidents",
@@ -176,10 +190,18 @@ class TestIncidentAPI:
 
         update_resp = client.put(
             f"/api/incidents/{incident_id}",
-            json={"client_code": "TST", "status": "RESOLVED", "outcome": "Invoice simulation is stable."},
+            json={
+                "client_code": "TST",
+                "status": "RESOLVED",
+                "outcome": "Invoice simulation is stable.",
+                "delivery_output_used": "YES",
+                "include_in_ip_evidence": "NO",
+            },
         )
         assert update_resp.status_code == 200
         assert update_resp.json()["status"] == "RESOLVED"
+        assert update_resp.json()["delivery_output_used"] == "YES"
+        assert update_resp.json()["include_in_ip_evidence"] == "NO"
 
         bad_resp = client.put(
             f"/api/incidents/{incident_id}",
@@ -295,6 +317,28 @@ class TestIncidentAPI:
         assert delete_resp.status_code == 200
         assert not (tmp_path / file_ev["storage_path"]).exists()
 
+    def test_usage_event_link_and_mark_verified_api(self, tmp_path, monkeypatch):
+        client = _make_api_client(tmp_path, monkeypatch)
+        incident = client.post(
+            "/api/incidents",
+            json={"client_code": "TST", "title": "Usage link incident", "period_year": 2026},
+        ).json()
+
+        link_resp = client.post(
+            f"/api/incidents/{incident['id']}/link-usage-event",
+            json={"client_code": "TST", "usage_id": "USE-20260515121000-ABCDEF1234"},
+        )
+        assert link_resp.status_code == 200
+        assert "USE-20260515121000-ABCDEF1234" in link_resp.json()["usage_event_ids"]
+
+        verify_resp = client.post(
+            f"/api/incidents/{incident['id']}/mark-verified",
+            json={"client_code": "TST"},
+        )
+        assert verify_resp.status_code == 200
+        assert verify_resp.json()["verified_at"]
+        assert verify_resp.json()["usage_event_id"].startswith("USE-")
+
     def test_generate_kb_draft_creates_draft_and_links_incident(self, tmp_path, monkeypatch):
         client = _make_api_client(tmp_path, monkeypatch)
         incident = client.post(
@@ -306,7 +350,7 @@ class TestIncidentAPI:
                 "period_year": 2026,
                 "period_month": 5,
                 "sap_process": "Move-in",
-                "sap_objects": ["EVER", "EANL"],
+                "sap_objects": ["EVER", "EANL", "ZISU_MOVEIN_RULE"],
                 "problem_statement": "Move-in failed for edge case PODs.",
                 "solution": "Added a reusable validation path.",
             },
@@ -324,9 +368,12 @@ class TestIncidentAPI:
         assert kb_item is not None
         assert kb_item.status == "DRAFT"
         assert kb_item.client_scope == "client"
+        assert "ZISU_MOVEIN_RULE" in kb_item.sap_objects_json
 
         detail = client.get(f"/api/incidents/{incident['id']}?client_code=TST").json()
         assert kb_id in detail["linked_kb_ids"]
+        assert resp.json()["usage_event_id"] in detail["usage_event_ids"]
+        assert any(event.get("z_custom_objects_involved") for event in read_usage_events(tmp_path))
 
     def test_dossier_api_returns_pdf_with_english_sections(self, tmp_path, monkeypatch):
         client = _make_api_client(tmp_path, monkeypatch, clients=("TST", "ACME"), active_client="TST")
@@ -355,6 +402,15 @@ class TestIncidentAPI:
                 "ipbox_relevance": "NOT_QUALIFYING",
             },
         )
+        client.post(
+            "/api/incidents",
+            json={
+                "client_code": "TST",
+                "title": "Excluded from annual evidence",
+                "period_year": 2026,
+                "include_in_ip_evidence": "NO",
+            },
+        )
 
         resp = client.get("/api/ipbox/dossier?year=2026")
         assert resp.status_code == 200
@@ -365,6 +421,7 @@ class TestIncidentAPI:
         assert "Totals by Client" in text
         assert "Qualifying Candidate Appendices" in text
         assert "Dossier candidate" in text
+        assert "Excluded from annual evidence" not in text
 
 
 class TestIpBoxPdf:

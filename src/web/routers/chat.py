@@ -32,6 +32,9 @@ async def chat_send(request: Request):
     scope = body.get("scope", "general")
     type_filter = body.get("type_filter") or None
     session_id = body.get("session_id")
+    ticket_reference = (body.get("ticket_reference") or "").strip()
+    sap_module = (body.get("sap_module") or "").strip()
+    sap_process = (body.get("sap_process") or "").strip()
 
     if not question:
         return JSONResponse({"error": "Question is empty."}, status_code=400)
@@ -67,7 +70,7 @@ async def chat_send(request: Request):
                 db_path = cm.get_standard_dir() / "assistant_kb.sqlite"
                 kb_repo = KBItemRepository(db_path)
 
-            result = chat_svc.ancliar(
+            result = chat_svc.answer(
                 question=question,
                 kb_repo=kb_repo,
                 scope=scope,
@@ -91,7 +94,7 @@ async def chat_send(request: Request):
                     chat_repo.add_message(
                         session_id=current_session_id,
                         role="assistant",
-                        content=result.ancliar,
+                        content=result.answer,
                         used_kb_items_json=json.dumps(result.used_kb_items),
                         model_called=1 if result.model_called else 0,
                     )
@@ -99,21 +102,79 @@ async def chat_send(request: Request):
                     log.warning("Failed to persist chat message: %s", pe)
 
             sources = []
+            sap_objects = []
             for s in result.sources:
+                item_sap_objects = json.loads(s.sap_objects_json) if s.sap_objects_json else []
+                sap_objects.extend(item_sap_objects)
                 sources.append({
                     "kb_id": s.kb_id,
                     "title": s.title,
                     "type": s.type,
                     "tags": json.loads(s.tags_json) if s.tags_json else [],
+                    "sap_objects": item_sap_objects,
                 })
 
+            usage_id = None
+            try:
+                from src.ipbox.usage_logging import (
+                    create_usage_record,
+                    detect_custom_sap_objects,
+                    make_id_list,
+                    save_usage_event,
+                )
+
+                scores = [float(score) for score in result.source_scores.values()]
+                namespace = (
+                    "STANDARD"
+                    if scope == "general"
+                    else f"CLIENT:{client_code or 'NONE'}"
+                    if scope == "client"
+                    else f"CLIENT_PLUS_STANDARD:{client_code or 'NONE'}"
+                )
+                record = create_usage_record(
+                    user="local-user",
+                    active_client=client_code or "",
+                    selected_scope=scope,
+                    selected_mode=type_filter or "ALL_TYPES",
+                    ticket_reference=ticket_reference,
+                    task_type="RAG_CHAT",
+                    sap_module=sap_module,
+                    sap_isu_process=sap_process,
+                    search_mode="AI_ONLY",
+                    sources_used="KNOWLEDGE_BASE",
+                    query_text=question,
+                    response_text=result.answer,
+                    retrieval_count=len(result.used_kb_items),
+                    number_of_documents_retrieved=len(result.used_kb_items),
+                    average_similarity_score=(sum(scores) / len(scores)) if scores else None,
+                    retrieved_kb_item_ids=make_id_list(result.used_kb_items),
+                    namespace_applied=namespace,
+                    standard_kb_used="YES" if scope in ("general", "client_plus_standard") else "NO",
+                    client_kb_used="YES" if scope in ("client", "client_plus_standard") and client_code else "NO",
+                    contains_z_objects=detect_custom_sap_objects(sap_objects),
+                    z_custom_objects_involved=detect_custom_sap_objects(sap_objects),
+                    output_used="NO",
+                    used_for_client_delivery="NO",
+                    delivery_used="NO",
+                    human_reviewed="NO",
+                    manual_verification_status="TODO/TBC",
+                    software_feature_used="RAG chat",
+                    software_features_used="RAG chat;namespace filtering",
+                    extra={"chat_session_id": current_session_id or ""},
+                )
+                save_usage_event(state.data_root, record)
+                usage_id = record.usage_id
+            except Exception as log_error:
+                log.warning("Failed to write usage evidence event: %s", log_error)
+
             yield {
-                "event": "ancliar",
+                "event": "answer",
                 "data": json.dumps({
-                    "ancliar": result.ancliar,
+                    "answer": result.answer,
                     "sources": sources,
                     "model_called": result.model_called,
                     "used_kb_items": result.used_kb_items,
+                    "usage_id": usage_id,
                 }),
             }
 

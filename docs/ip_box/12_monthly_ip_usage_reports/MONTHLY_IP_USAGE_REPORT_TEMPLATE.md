@@ -22,12 +22,26 @@
 | Assisted ticket percentage |  |
 | Outputs generated |  |
 | Outputs used in client delivery |  |
+| Discarded outputs/events |  |
 | Human-reviewed outputs |  |
 | Verified outputs |  |
+| Namespace-filtered searches |  |
+| Standard KB uses |  |
+| Client KB uses |  |
+| Z/custom-object related uses |  |
 | Estimated time saved |  |
 | Average software contribution factor |  |
 | Qualifying service factor |  |
 | Proposed IP attribution percentage |  |
+
+## Evidence Breakdown
+
+- Client breakdown:
+- SAP module breakdown:
+- SAP process breakdown:
+- Evidence IDs:
+- Missing fields / TODOs:
+- Excluded administrative or non-qualifying events:
 
 ## Formula
 

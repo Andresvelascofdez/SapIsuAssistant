@@ -17,7 +17,7 @@
 - Research: source registry, crawler, topic catalog, normalizer, auditor, ingestor and indexer.
 - Kanban: operational ticket board.
 - Finance: expense/invoice tracking and OCR support.
-- IP Box evidence: usage logging and monthly report generation.
+- IP Box evidence: automatic usage logging, monthly usage review UI, monthly report generation and revenue mapping template.
 
 ## Potential Company-Owned IP
 
@@ -33,6 +33,7 @@ The company may own the original proprietary software components it created, sub
 - Research-agent ingestion model and curated topic catalog.
 - IP Box dossier generator.
 - Usage logging and monthly reporting modules.
+- Usage evidence review UI and metadata update workflow.
 - Tests, documentation and templates.
 
 ## Not Owned
@@ -47,4 +48,4 @@ The company may own the original proprietary software components it created, sub
 
 ## Current Evidence
 
-Evidence currently available in the repository includes source code, tests, README, changelog, incident/IP Box dossier module, research pipeline, and this documentation pack. Commit hashes, screenshots, management decisions and real usage logs must be collected from actual records and must not be invented.
+Evidence currently available in the repository includes source code, tests, README, changelog, incident/IP Box dossier module, usage evidence review workflow, research pipeline, and this documentation pack. Commit hashes, screenshots, management decisions and real reviewed usage logs must be collected from actual records and must not be invented.

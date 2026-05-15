@@ -766,7 +766,7 @@ class TestTokenGating:
         qdrant_svc.search.return_value = []
         kb_repo = MagicMock()
 
-        result = chat_svc.ancliar(
+        result = chat_svc.answer(
             question="test question",
             kb_repo=kb_repo,
             scope="general",
@@ -788,10 +788,10 @@ class TestTokenGating:
         kb_repo.get_by_id.return_value = item
 
         chat_svc.client.responses.create.return_value = MagicMock(
-            output_text="Ancliar from GPT"
+            output_text="Answer from GPT"
         )
 
-        result = chat_svc.ancliar(
+        result = chat_svc.answer(
             question="billing error",
             kb_repo=kb_repo,
             scope="general",
@@ -811,7 +811,7 @@ class TestTokenGating:
         kb_repo = MagicMock()
         kb_repo.get_by_id.return_value = None  # Not found in SQLite
 
-        result = chat_svc.ancliar(
+        result = chat_svc.answer(
             question="something",
             kb_repo=kb_repo,
             scope="general",
@@ -829,7 +829,7 @@ class TestTokenGating:
         kb_repo = MagicMock()
         kb_repo.get_by_id.return_value = item
 
-        result = chat_svc.ancliar(
+        result = chat_svc.answer(
             question="something",
             kb_repo=kb_repo,
             scope="general",
@@ -851,7 +851,7 @@ class TestScopeIsolation:
         qdrant_svc.search.return_value = []
         kb_repo = MagicMock()
 
-        chat_svc.ancliar(
+        chat_svc.answer(
             question="test", kb_repo=kb_repo,
             scope="general", client_code=None,
         )
@@ -865,7 +865,7 @@ class TestScopeIsolation:
         qdrant_svc.search.return_value = []
         kb_repo = MagicMock()
 
-        chat_svc.ancliar(
+        chat_svc.answer(
             question="test", kb_repo=kb_repo,
             scope="client", client_code="CLIA",
         )
@@ -880,7 +880,7 @@ class TestScopeIsolation:
         qdrant_svc.search.return_value = []
         kb_repo = MagicMock()
 
-        chat_svc.ancliar(
+        chat_svc.answer(
             question="test", kb_repo=kb_repo,
             scope="client_plus_standard", client_code="CLIA",
         )
@@ -955,6 +955,7 @@ class TestQdrantScopeRouting:
         collection_names = [c.kwargs["collection_name"] for c in calls]
         assert "kb_standard" in collection_names
         assert "kb_CLIA" in collection_names
+        assert "kb_CLIB" not in collection_names
 
 
 # ── Type filter ──
@@ -1011,7 +1012,7 @@ class TestTypeFilter:
         qdrant_svc.search.return_value = []
         kb_repo = MagicMock()
 
-        chat_svc.ancliar(
+        chat_svc.answer(
             question="test", kb_repo=kb_repo,
             scope="general", type_filter="ROOT_CAUSE",
         )
@@ -1039,10 +1040,10 @@ class TestRankingBoost:
         kb_repo = MagicMock()
         kb_repo.get_by_id.side_effect = lambda kid: item_low if kid == "low" else item_high
 
-        chat_svc.client.responses.create.return_value = MagicMock(output_text="ancliar")
+        chat_svc.client.responses.create.return_value = MagicMock(output_text="answer")
 
         # Query mentions IDEX - should boost the "high" item
-        result = chat_svc.ancliar(
+        result = chat_svc.answer(
             question="Tell me about IDEX process",
             kb_repo=kb_repo, scope="general",
         )
@@ -1061,10 +1062,10 @@ class TestRankingBoost:
         kb_repo = MagicMock()
         kb_repo.get_by_id.side_effect = lambda kid: item_a if kid == "a" else item_b
 
-        chat_svc.client.responses.create.return_value = MagicMock(output_text="ancliar")
+        chat_svc.client.responses.create.return_value = MagicMock(output_text="answer")
 
         # Query mentions /IDXGC/PDOCMON01
-        result = chat_svc.ancliar(
+        result = chat_svc.answer(
             question="Check /IDXGC/PDOCMON01 program",
             kb_repo=kb_repo, scope="general",
         )
@@ -1377,7 +1378,7 @@ class TestE2E1ClientScopeResultsExist:
         )
 
         # Query in client scope
-        result = chat_svc.ancliar(
+        result = chat_svc.answer(
             question="How to fix billing?",
             kb_repo=kb_repo,
             scope="client",
@@ -1393,7 +1394,7 @@ class TestE2E1ClientScopeResultsExist:
         chat_svc.client.responses.create.assert_called_once()
 
         # Verify response and sources saved
-        assert "EA02" in result.ancliar
+        assert "EA02" in result.answer
         assert len(result.sources) == 1
         assert len(result.used_kb_items) == 1
         assert result.used_kb_items[0]["kb_id"] == item.kb_id
@@ -1403,7 +1404,7 @@ class TestE2E1ClientScopeResultsExist:
         session = chat_repo.create_session(scope="client", client_code="CLIA")
         chat_repo.add_message(session.session_id, "user", "How to fix billing?")
         chat_repo.add_message(
-            session.session_id, "assistant", result.ancliar,
+            session.session_id, "assistant", result.answer,
             used_kb_items_json=json.dumps(result.used_kb_items),
             model_called=1,
         )
@@ -1431,7 +1432,7 @@ class TestE2E2ClientScopeNoResults:
         chat_svc = ChatService(embed_svc, qdrant_svc, api_key="fake")
         chat_svc.client = MagicMock()
 
-        result = chat_svc.ancliar(
+        result = chat_svc.answer(
             question="Anything",
             kb_repo=kb_repo,
             scope="client",
@@ -1442,12 +1443,12 @@ class TestE2E2ClientScopeNoResults:
         assert result.model_called is False
         chat_svc.client.responses.create.assert_not_called()
         # No knowledge found message
-        assert "No se encontraron" in result.ancliar
+        assert "No se encontraron" in result.answer
 
         # Persist
         chat_repo = ChatRepository(tmp_path / "chat.db")
         session = chat_repo.create_session(scope="client", client_code="CLIA")
-        chat_repo.add_message(session.session_id, "assistant", result.ancliar, model_called=0)
+        chat_repo.add_message(session.session_id, "assistant", result.answer, model_called=0)
 
         msgs = chat_repo.get_messages(session.session_id)
         assert msgs[0].model_called == 0
@@ -1492,7 +1493,7 @@ class TestE2E3ClientPlusStandardMerge:
             output_text="Based on GPKE and CLIA billing..."
         )
 
-        result = chat_svc.ancliar(
+        result = chat_svc.answer(
             question="Tell me about billing and GPKE",
             kb_repo=kb_repo,
             scope="client_plus_standard",
@@ -1518,7 +1519,7 @@ class TestE2E4ChatHistory:
         # Create chat A with messages
         s_a = repo.create_session(scope="general", title="Chat A")
         repo.add_message(s_a.session_id, "user", "Question A")
-        repo.add_message(s_a.session_id, "assistant", "Ancliar A", model_called=1)
+        repo.add_message(s_a.session_id, "assistant", "Answer A", model_called=1)
 
         # New chat creates chat B
         s_b = repo.create_session(scope="client", client_code="CLIA", title="Chat B")

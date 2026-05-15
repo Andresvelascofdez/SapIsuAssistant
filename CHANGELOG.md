@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.7.0 (2026-05-15)
+
+### IP Evidence Workflow
+
+- Added `/ipbox/usage` for monthly usage evidence review, filtering, metadata completion and Markdown/CSV report export.
+- Added automatic hashed usage evidence events for RAG chat, incident registration, incident verification, incident-to-KB draft generation, KB approval/indexing or rejection, research-agent promotion/indexing and annual dossier generation.
+- Extended usage records with product version, selected scope/mode, SAP process, Standard/client KB flags, Z/custom-object flags, manual verification status, excluded-from-IP-evidence flag, retrieved KB/incident IDs and software feature metadata.
+- Strengthened monthly reporting with client/module/process breakdowns, reviewed/used/discarded counters, namespace and KB-use counters, evidence IDs and missing-field/TODO reporting.
+- Extended the revenue mapping template fields for advisor-facing reconciliation while keeping final tax treatment outside the tool.
+
+### Incidents and Knowledge Governance
+
+- Added usage-event linking, delivery-output flags, annual-evidence include/exclude flags and verified status to incidents.
+- Added incident detail controls for linking usage events, marking incidents verified and controlling evidence inclusion.
+- Prevented approval/index actions on already approved KB items while keeping rejection available.
+- Kept automatic research/crawler output in Standard KB; client-specific content remains manual and client-scoped.
+
+### Documentation and Validation
+
+- Updated README and IP Box documentation for the implemented usage evidence review workflow, current limitations and advisor-review boundaries.
+- Added prepared evidence folders for real screenshots, test runs, release notes and anonymized cases.
+- Added namespace/no-leakage, Z/custom detection, usage-review API, incident-evidence linking and research Standard-KB policy tests.
+- Updated visible application version to `v0.7.0`.
+
 ## v0.6.2 (2026-05-07)
 
 ### IP Box Documentation Critical Review

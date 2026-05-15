@@ -37,7 +37,7 @@ This dossier must not be used to invent evidence. Development dates, commit hist
 
 # Executive Summary
 
-SAP IS-U Assistant is intended to turn SAP IS-U consulting know-how into a governed, reusable, client-isolated software workflow. The product addresses a common problem in utility consulting: technical knowledge is spread across prior tickets, SAP objects, screenshots, consultant notes, public references, client-specific Z objects, market communication rules and individual memory. This creates repeated analysis, inconsistent ancliars, weak traceability and higher risk of mixing confidential client knowledge with generic SAP knowledge.
+SAP IS-U Assistant is intended to turn SAP IS-U consulting know-how into a governed, reusable, client-isolated software workflow. The product addresses a common problem in utility consulting: technical knowledge is spread across prior tickets, SAP objects, screenshots, consultant notes, public references, client-specific Z objects, market communication rules and individual memory. This creates repeated analysis, inconsistent answers, weak traceability and higher risk of mixing confidential client knowledge with generic SAP knowledge.
 
 The tool solves this by providing a structured knowledge base, semantic retrieval, RAG chat, SAP IS-U incident registration, evidence capture, controlled ingestion/review, autonomous Standard KB research agents, namespace-aware retrieval and advisor-facing evidence reports. The OpenAI model is only a provider. The proprietary value is the software layer that decides what is stored, how knowledge is classified, how retrieval scope is enforced, how incidents become governed knowledge, how research output is normalized, and how evidence can be reported.
 
@@ -70,13 +70,13 @@ The product currently includes:
 
 ## Intended user
 
-The intended user is a SAP IS-U consultant or technical lead who needs to ancliar questions, investigate incidents, prepare client responses, reuse previous learning and maintain a clear boundary between generic SAP IS-U knowledge and client-specific knowledge.
+The intended user is a SAP IS-U consultant or technical lead who needs to answer questions, investigate incidents, prepare client responses, reuse previous learning and maintain a clear boundary between generic SAP IS-U knowledge and client-specific knowledge.
 
 ## Product surface
 
 The main product surfaces are:
 
-- Chat: semantic retrieval and AI-assisted technical ancliars.
+- Chat: semantic retrieval and AI-assisted technical answers.
 - Ingesta: knowledge ingestion, review, approval, indexing and research-agent supervision.
 - Incidencias: SAP IS-U incident capture, evidence and reusable knowledge generation.
 - IP Box dossier: yearly incident evidence PDF.
@@ -96,8 +96,8 @@ The product addresses the following problems:
 - Repeated investigation of similar SAP IS-U incidents.
 - Difficulty searching prior incidents by SAP object, process, affected ID or outcome.
 - Lack of separation between Standard SAP knowledge and client-specific Z/private knowledge.
-- Risk that an AI ancliar uses information from the wrong client context.
-- Weak traceability between a technical ancliar, its sources and the evidence used.
+- Risk that an AI answer uses information from the wrong client context.
+- Weak traceability between a technical answer, its sources and the evidence used.
 - Manual and inconsistent knowledge-base creation.
 - Fragmented documentation across SAP Help, SAP Datasheet, regulators, EDIFACT/MaKo references and consultant notes.
 - Lack of structured evidence for software-assisted delivery.
@@ -153,7 +153,7 @@ This section identifies the custom software elements that distinguish the tool f
 
 ## Semantic SAP IS-U knowledge retrieval
 
-The tool stores knowledge as structured KB items with title, Markdown content, type, tags, SAP objects, scope and review status. It embeds approved knowledge and searches Qdrant collections before the LLM is called. The ancliar is therefore grounded in the tool's curated knowledge, not only in the generic model.
+The tool stores knowledge as structured KB items with title, Markdown content, type, tags, SAP objects, scope and review status. It embeds approved knowledge and searches Qdrant collections before the LLM is called. The answer is therefore grounded in the tool's curated knowledge, not only in the generic model.
 
 ## Standard vs. client-specific knowledge separation
 
@@ -255,6 +255,7 @@ The UI is part of the company-developed software layer because it implements a d
 - `src/web/templates/incidents.html`: incident list, filters and create action.
 - `src/web/templates/incident_detail.html`: incident editing and evidence.
 - `src/web/templates/ipbox_dossier.html`: annual dossier generation.
+- `src/web/templates/ipbox_usage.html`: monthly usage evidence review and report export.
 - `src/web/templates/kanban.html`: ticket board.
 - `src/web/templates/finance_*.html`: finance surfaces.
 - `src/web/templates/settings.html`: configuration surface.
@@ -279,7 +280,7 @@ The research module stores source registry entries, research runs, crawler runs,
 
 ## IP Box module
 
-The IP Box module stores and aggregates usage events. It records hashes, namespace, retrieval counts, output-used flags, estimated time saved and contribution fields. This is a backend evidence layer; full UI capture is planned/TBC.
+The IP Box module stores, reviews and aggregates usage events. It records hashes, product version, namespace, retrieval counts, Standard/client KB flags, output-used flags, delivery-use flags, manual verification status, estimated time saved and contribution fields. The `/ipbox/usage` UI lets the user review actual recorded events, add missing references and export monthly evidence reports.
 
 ## Kanban and finance modules
 
@@ -308,8 +309,8 @@ The AI layer uses external OpenAI services for embeddings and chat generation. T
 5. The application filters and ranks results using tags, SAP objects and score thresholds.
 6. If no relevant results exist, the application can avoid calling the model to save cost and reduce hallucination risk.
 7. If relevant context exists, the chat service builds a controlled prompt using retrieved sources.
-8. The OpenAI chat model generates an ancliar.
-9. The UI displays the ancliar and source/audit panel.
+8. The OpenAI chat model generates an answer.
+9. The UI displays the answer and source/audit panel.
 
 ## Why this matters
 
@@ -321,12 +322,12 @@ The model is not the product. The product is the full controlled workflow:
 - Which documents are retrieved.
 - Which sources are shown.
 - Whether the model should be called.
-- How the ancliar is traceable.
+- How the answer is traceable.
 - How future usage can be evidenced.
 
 ## Current limitations
 
-The application does not guarantee ancliar correctness. SAP IS-U consultants must verify ancliars against project facts, SAP systems, client policy and official documentation. Optional usefulness and accuracy fields exist in the usage log, but formal feedback UI and accuracy scoring are planned/TBC.
+The application does not guarantee answer correctness. SAP IS-U consultants must verify answers against project facts, SAP systems, client policy and official documentation. Optional usefulness and accuracy fields exist in the usage log, but formal feedback UI and accuracy scoring are planned/TBC.
 
 <!-- pagebreak -->
 
@@ -393,7 +394,7 @@ The active client selected in the UI influences:
 
 ## Leak-prevention objective
 
-The design objective is to prevent knowledge from Client A being used in Client B ancliars. The application should prefer explicit scope selection and storage separation over relying on prompt instructions alone.
+The design objective is to prevent knowledge from Client A being used in Client B answers. The application should prefer explicit scope selection and storage separation over relying on prompt instructions alone.
 
 ## Current and planned Z handling
 
@@ -512,8 +513,10 @@ The backend usage log can record:
 
 - Usage ID.
 - Timestamp.
+- Product version.
 - User.
 - Active client or Standard namespace.
+- Selected scope and mode.
 - Ticket reference.
 - Task type.
 - SAP module and process.
@@ -523,26 +526,35 @@ The backend usage log can record:
 - Average similarity score.
 - Whether Z/private objects were involved.
 - Namespace applied.
+- Standard KB used flag.
+- Client KB used flag.
 - Output type.
 - Whether output was used.
 - Whether output was used for client delivery.
 - Actual time.
 - Estimated time without the tool.
 - Estimated time saved.
+- Manual verification status.
+- Excluded-from-IP-evidence flag.
 - Optional usefulness rating.
 - Optional accuracy score.
 - Software contribution factor.
+- Software feature used.
+- Retrieved KB and incident IDs.
 - Query and response hashes.
 - Evidence path.
 - Notes.
 
+Automatic usage events are currently created for the priority evidence workflows: RAG chat answers, incident registration, incident verification, incident-to-KB draft generation, KB approval/indexing or rejection, research-agent promotion/indexing and annual incident dossier generation. Monthly report generation is available from the IP evidence review UI and exports Markdown/CSV from real recorded events.
+
 ## Planned/TBC
 
-- UI capture for every relevant chat/incident/delivery output.
 - Formal consultant feedback workflow.
-- Formal ancliar usefulness reporting in the UI.
+- Formal answer usefulness reporting in the UI.
 - Independent accuracy estimation methodology.
 - Dashboard showing precision over time.
+- Extension of instrumentation to any future delivery workflow that is not yet usage-logged.
+- Reconciliation with timesheets, invoices and ticket-system exports.
 
 ## Advisor-useful interpretation
 
@@ -675,17 +687,17 @@ The following roadmap items would strengthen the evidence posture:
 
 ## Near term
 
-- Integrate usage logging into Chat, Incidents and Ingesta UI flows.
-- Add explicit output-used confirmation after important ancliars.
+- Extend usage logging to any future delivery workflow.
+- Add faster output-used confirmation after important answers from the chat screen.
 - Add feedback controls for usefulness and consultant verification.
 - Add namespace warnings when client-specific/Z objects are detected.
-- Add monthly advisor export from real logs.
+- Extend monthly advisor exports with timesheet and invoice reconciliation imports.
 - Add incident evidence export with anonymization controls.
 
 ## Medium term
 
 - Add dashboard for assisted productive hours.
-- Add verified-ancliar library and recurring-issue analytics.
+- Add verified-answer library and recurring-issue analytics.
 - Add stronger source quality scoring.
 - Add country-specific SAP IS-U rule packs.
 - Add deeper S/4HANA Utilities/Fiori/API coverage.
@@ -713,13 +725,14 @@ Roadmap items are future work. They should not be presented as implemented until
 - `src/web/routers/ingest.py`: ingestion and review API surface.
 - `src/web/routers/research.py`: research/crawler API surface.
 - `src/web/routers/incidents.py`: incident and dossier API surface.
+- `src/web/routers/ipbox.py`: usage evidence review and monthly report API surface.
 - `src/web/routers/kanban.py`: Kanban API surface.
 - `src/web/routers/finance.py`: finance API surface.
 - `src/web/routers/settings.py`: settings API surface.
 
 ## Assistant
 
-- `src/assistant/chat/chat_service.py`: ancliar orchestration.
+- `src/assistant/chat/chat_service.py`: answer orchestration.
 - `src/assistant/retrieval/embedding_service.py`: embeddings.
 - `src/assistant/retrieval/qdrant_service.py`: vector search and collections.
 - `src/assistant/retrieval/kb_indexer.py`: indexing.
@@ -733,6 +746,7 @@ Roadmap items are future work. They should not be presented as implemented until
 - `src/incidents/pdf/ipbox_dossier.py`: annual incident evidence PDF.
 - `src/ipbox/usage_logging.py`: backend usage logging.
 - `src/ipbox/reporting.py`: monthly usage reports and CSV export.
+- `src/web/routers/ipbox.py`: monthly usage evidence review endpoints.
 
 ## Research
 
@@ -779,7 +793,7 @@ The following checklist should be maintained with real records:
 
 The current product is useful, but the following limitations matter for advisor review:
 
-- Full UI-driven usage logging is not yet integrated.
+- Usage logging and review UI exist for priority workflows, but real monthly evidence still depends on consistent user review and completion of missing references.
 - Formal feedback and accuracy UI is not implemented.
 - Real usage logs are required before any income attribution model is reliable.
 - Research-agent coverage is useful but not exhaustive SAP IS-U expertise.

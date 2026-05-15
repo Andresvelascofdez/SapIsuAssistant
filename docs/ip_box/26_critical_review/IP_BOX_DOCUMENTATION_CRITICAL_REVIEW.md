@@ -15,7 +15,7 @@ This review does not provide tax advice and does not determine eligibility, qual
 | 100% attribution position | Required stronger wording | Marked as exceptional/aggressive, not a current claim, and unusable without near-total workflow centrality, complete logs, ticket evidence, human review, revenue mapping and advisor approval. |
 | 60% attribution position | Required stronger support language | Reframed as measurable target scenario, not a current claim. Added required inputs: assisted hours, total productive hours, contribution factor, qualifying service factor, output-use evidence, human review and revenue mapping. |
 | External model assistance vs. software-enabled work | Required wording cleanup | Replaced model-provider comparison wording with an external-LLM-provider plus company-developed orchestration/retrieval/namespace/evidence workflow boundary. |
-| Usage logging sufficiency | Improved | Added fields for human review, verification status, software features used, retrieved KB/incident IDs and output reference. Monthly reports now show total productive hours and assisted-hours percentage. |
+| Usage logging sufficiency | Improved | Added fields for human review, verification status, software features used, retrieved KB/incident IDs, namespace/KB-use flags and output reference. Priority workflows now create real usage events for later review. Monthly reports show productive hours, assisted-hours percentage, evidence IDs and missing fields. |
 | Fabricated evidence | Passed | Existing documents repeatedly prohibit invented commits, dates, screenshots, hours, tickets, usage logs and client evidence. This remains explicit. |
 | Advisor pack index completeness | Improved | Added the critical review item to the advisor pack index. Remaining items correctly mark real usage logs, revenue mapping and ownership records as TBC/partial where appropriate. |
 
@@ -39,13 +39,14 @@ This review does not provide tax advice and does not determine eligibility, qual
 - Updated economic attribution methodology to distinguish ordinary consulting, model-only assistance and company software-enabled work.
 - Updated monthly report template with human-reviewed/verified output metrics.
 - Updated usage logging specification and backend fields.
-- Updated monthly report generation to expose assisted-hours percentage and total productive SAP IS-U hours.
+- Updated monthly report generation to expose assisted-hours percentage, total productive SAP IS-U hours, evidence IDs and missing review fields.
+- Added `/ipbox/usage` as a review surface for actual usage events.
 - Updated Technical IP Dossier source and regenerated PDF.
 - Updated wording that previously relied on model-provider comparison language.
 
 ## Residual Risks
 
 - The documentation package is stronger, but real logs are still required before any percentage can be defended.
-- The current backend logging module is ready, but deeper UI capture remains planned/TBC.
+- Usage logging and review UI are implemented for priority workflows, but real usage logs, monthly review and revenue reconciliation remain required before advisor reliance.
 - The advisor pack is not a substitute for legal/tax advice.
 - Any client-specific evidence must be anonymized or approved before sharing.

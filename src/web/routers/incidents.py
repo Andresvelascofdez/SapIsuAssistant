@@ -65,6 +65,10 @@ def _incident_to_dict(incident: Incident, evidence_count: int | None = None) -> 
         "reusable_knowledge": incident.reusable_knowledge,
         "ipbox_relevance": incident.ipbox_relevance,
         "linked_kb_ids": json.loads(incident.linked_kb_ids_json or "[]"),
+        "usage_event_ids": json.loads(incident.usage_event_ids_json or "[]"),
+        "delivery_output_used": incident.delivery_output_used,
+        "include_in_ip_evidence": incident.include_in_ip_evidence,
+        "verified_at": incident.verified_at,
         "created_at": incident.created_at,
         "updated_at": incident.updated_at,
     }
@@ -165,6 +169,76 @@ def _auto_create_kb_draft(repo: IncidentRepository, code: str, incident: Inciden
     return _create_kb_draft_from_incident(repo, code, incident)
 
 
+def _log_incident_usage(
+    *,
+    request: Request,
+    repo: IncidentRepository,
+    code: str,
+    incident: Incident,
+    task_type: str,
+    feature: str,
+    response_text: str = "",
+    kb_ids: list[str] | None = None,
+) -> str | None:
+    """Record hashed IP evidence usage metadata for incident workflows."""
+    try:
+        from src.ipbox.usage_logging import (
+            create_usage_record,
+            detect_custom_sap_objects,
+            make_id_list,
+            save_usage_event,
+        )
+
+        sap_objects = json.loads(incident.sap_objects_json or "[]")
+        query_text = "\n".join(
+            value or ""
+            for value in [
+                incident.incident_code,
+                incident.title,
+                incident.sap_module,
+                incident.sap_process,
+                ", ".join(sap_objects),
+            ]
+        )
+        record = create_usage_record(
+            user="local-user",
+            active_client=code,
+            selected_scope="client",
+            selected_mode=feature,
+            ticket_reference=incident.incident_code,
+            task_type=task_type,
+            sap_module=incident.sap_module or "",
+            sap_isu_process=incident.sap_process or "",
+            search_mode="INCIDENTS_ONLY",
+            sources_used="INCIDENTS",
+            query_text=query_text,
+            response_text=response_text or incident.incident_code,
+            retrieved_incident_ids=incident.id,
+            retrieved_kb_item_ids=make_id_list(kb_ids or []),
+            retrieval_count=1,
+            number_of_documents_retrieved=1,
+            namespace_applied=f"CLIENT:{code}",
+            standard_kb_used="NO",
+            client_kb_used="YES",
+            contains_z_objects=detect_custom_sap_objects(sap_objects),
+            z_custom_objects_involved=detect_custom_sap_objects(sap_objects),
+            output_used="NO",
+            used_for_client_delivery=incident.delivery_output_used,
+            delivery_used=incident.delivery_output_used,
+            human_reviewed="NO",
+            manual_verification_status="TODO/TBC",
+            excluded_from_ip_evidence="NO" if incident.include_in_ip_evidence == "YES" else "YES",
+            software_feature_used=feature,
+            software_features_used=f"{feature};incident evidence",
+        )
+        save_usage_event(deps.DATA_ROOT, record)
+        repo.link_usage_event(incident.id, record.usage_id)
+        return record.usage_id
+    except Exception as error:
+        log.warning("Failed to write incident usage evidence event: %s", error)
+        return None
+
+
 @router.get("/incidents")
 async def incidents_page(request: Request):
     ctx = deps.get_template_context(request)
@@ -243,12 +317,24 @@ async def create_incident(request: Request):
             outcome=body.get("outcome"),
             reusable_knowledge=body.get("reusable_knowledge"),
             ipbox_relevance=body.get("ipbox_relevance", "UNCLEAR"),
+            delivery_output_used=body.get("delivery_output_used", "NO"),
+            include_in_ip_evidence=body.get("include_in_ip_evidence", "YES"),
         )
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
+    usage_id = _log_incident_usage(
+        request=request,
+        repo=repo,
+        code=code,
+        incident=incident,
+        task_type="INCIDENT_REGISTRATION",
+        feature="incident retrieval",
+    )
     kb_item = _auto_create_kb_draft(repo, code, incident)
     incident = repo.get_incident(incident.id) or incident
     data = _incident_to_dict(incident, evidence_count=0)
+    if usage_id:
+        data["usage_event_id"] = usage_id
     if kb_item:
         data["auto_kb_draft_id"] = kb_item.kb_id
     return data
@@ -297,6 +383,8 @@ async def update_incident(incident_id: str, request: Request):
             "outcome",
             "reusable_knowledge",
             "ipbox_relevance",
+            "delivery_output_used",
+            "include_in_ip_evidence",
         }
     }
     try:
@@ -310,6 +398,45 @@ async def update_incident(incident_id: str, request: Request):
     data = _incident_to_dict(incident, evidence_count=len(repo.list_evidence(incident_id)))
     if kb_item:
         data["auto_kb_draft_id"] = kb_item.kb_id
+    return data
+
+
+@router.post("/api/incidents/{incident_id}/link-usage-event")
+async def link_usage_event(incident_id: str, request: Request):
+    body = await request.json()
+    repo, code, error = _get_repo_or_response(request, body.get("client_code"))
+    if error:
+        return error
+    usage_id = (body.get("usage_id") or "").strip()
+    if not usage_id:
+        return JSONResponse({"error": "usage_id is required."}, status_code=400)
+    incident = repo.link_usage_event(incident_id, usage_id)
+    if not incident:
+        return JSONResponse({"error": "Incident not found."}, status_code=404)
+    return _incident_to_dict(incident, evidence_count=len(repo.list_evidence(incident_id)))
+
+
+@router.post("/api/incidents/{incident_id}/mark-verified")
+async def mark_incident_verified(incident_id: str, request: Request):
+    body = await request.json()
+    repo, code, error = _get_repo_or_response(request, body.get("client_code"))
+    if error:
+        return error
+    incident = repo.mark_verified(incident_id)
+    if not incident:
+        return JSONResponse({"error": "Incident not found."}, status_code=404)
+    usage_id = _log_incident_usage(
+        request=request,
+        repo=repo,
+        code=code,
+        incident=incident,
+        task_type="INCIDENT_VERIFICATION",
+        feature="incident retrieval",
+        response_text=incident.verified_at or "",
+    )
+    data = _incident_to_dict(repo.get_incident(incident_id) or incident, evidence_count=len(repo.list_evidence(incident_id)))
+    if usage_id:
+        data["usage_event_id"] = usage_id
     return data
 
 
@@ -431,16 +558,27 @@ async def generate_kb_draft(incident_id: str, request: Request):
         return JSONResponse({"error": "Incident not found."}, status_code=404)
 
     kb_item = _create_kb_draft_from_incident(repo, code, incident)
+    usage_id = _log_incident_usage(
+        request=request,
+        repo=repo,
+        code=code,
+        incident=repo.get_incident(incident_id) or incident,
+        task_type="INCIDENT_TO_KB_DRAFT",
+        feature="incident-to-KB",
+        response_text=kb_item.kb_id,
+        kb_ids=[kb_item.kb_id],
+    )
     return {
         "kb_id": kb_item.kb_id,
         "title": kb_item.title,
         "status": kb_item.status,
         "type": kb_item.type,
+        "usage_event_id": usage_id,
     }
 
 
 @router.get("/api/ipbox/dossier")
-async def generate_ipbox_dossier(year: int = Query(...)):
+async def generate_ipbox_dossier(request: Request, year: int = Query(...)):
     cm = deps.get_client_manager()
     incidents_with_evidence: list[tuple[Incident, list[IncidentEvidence]]] = []
     for client in cm.list_clients():
@@ -448,6 +586,8 @@ async def generate_ipbox_dossier(year: int = Query(...)):
         if error or not repo:
             continue
         for incident in repo.list_incidents(year=year):
+            if incident.include_in_ip_evidence == "NO":
+                continue
             incidents_with_evidence.append((incident, repo.list_evidence(incident.id)))
 
     incidents_with_evidence.sort(key=lambda pair: (pair[0].client_code, pair[0].incident_code))
@@ -457,6 +597,39 @@ async def generate_ipbox_dossier(year: int = Query(...)):
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"ipbox_dossier_{year}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
     generate_ipbox_dossier_pdf(year, incidents_with_evidence, out_path)
+    try:
+        from src.ipbox.usage_logging import create_usage_record, save_usage_event
+
+        state = deps.get_state(request)
+        record = create_usage_record(
+            user="local-user",
+            active_client=state.active_client_code or "",
+            selected_scope="all_clients",
+            selected_mode="annual_pdf",
+            ticket_reference=f"IPBOX-DOSSIER-{year}",
+            task_type="IPBOX_DOSSIER_GENERATION",
+            sap_module="",
+            sap_isu_process="",
+            search_mode="INCIDENTS_ONLY",
+            sources_used="INCIDENTS",
+            query_text=str(year),
+            response_text=out_path.name,
+            retrieved_incident_ids=",".join(pair[0].id for pair in incidents_with_evidence),
+            retrieval_count=len(incidents_with_evidence),
+            number_of_documents_retrieved=len(incidents_with_evidence),
+            namespace_applied="ALL_CLIENT_INCIDENTS",
+            software_feature_used="dossier/reporting",
+            software_features_used="dossier/reporting;incident evidence",
+            output_used="NO",
+            used_for_client_delivery="NO",
+            delivery_used="NO",
+            human_reviewed="NO",
+            manual_verification_status="TODO/TBC",
+            evidence_path=out_path.relative_to(deps.DATA_ROOT).as_posix(),
+        )
+        save_usage_event(deps.DATA_ROOT, record)
+    except Exception as error:
+        log.warning("Failed to log dossier usage evidence event: %s", error)
     return FileResponse(
         path=str(out_path),
         filename=f"sap_isu_ipbox_dossier_{year}.pdf",
