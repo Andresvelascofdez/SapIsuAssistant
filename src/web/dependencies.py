@@ -10,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 from src.shared.app_state import AppState
 from src.shared.client_manager import ClientManager
 from src.shared.env_loader import load_env_file, read_env_file
+from src.shared.version import APP_VERSION
 
 _HERE = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=_HERE / "templates")
@@ -67,6 +68,7 @@ def get_template_context(request: Request) -> dict:
         "clients": [c.code for c in clients],
         "chat_retention_days": state.chat_retention_days,
         "stale_ticket_days": state.stale_ticket_days,
+        "app_version": APP_VERSION,
     }
 
 

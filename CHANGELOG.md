@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.8.0 (2026-06-17)
+
+### Recruitment
+
+- Added a Recruitment module for a simple CV and candidate database.
+- Added SQLite-backed candidate storage under `data/recruitment/candidates.db`.
+- Added original CV storage under `data/recruitment/cvs/`.
+- Added PDF, DOCX and TXT CV import with local text extraction.
+- Added rule-based CV autofill for contact details, LinkedIn, role, seniority, experience, rates and currency.
+- Added manual save behavior for imported CVs so imports prefill a form but do not automatically create candidates.
+- Added candidate search across structured fields and extracted CV text.
+- Added combinable filters for skill text, SAP module text, language text, country, seniority, work mode and maximum hourly/daily rates.
+- Added `/recruitment` UI and JSON APIs for candidate CRUD, CV import and local CV open requests.
+- Documented that Recruitment v1 intentionally excludes AI scoring, matching percentages, pipeline/status tracking, availability management, margins, profit estimates and predefined skill/module taxonomies.
+
+### Tests and Documentation
+
+- Added dedicated Recruitment tests covering schema creation, validation, CRUD, search, filters, TXT/DOCX/PDF parsing, broken-file handling, rule-based autofill and API behavior.
+- Updated README with Recruitment capabilities, storage layout, API routes, usage instructions and focused test commands.
+- Updated application version to `v0.8.0`.
+
 ## v0.7.0 (2026-05-15)
 
 ### IP Evidence Workflow

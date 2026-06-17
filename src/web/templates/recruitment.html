@@ -1,0 +1,439 @@
+{% extends "base.html" %}
+{% set active_tab = "recruitment" %}
+{% block content %}
+<div x-data="recruitmentApp()" x-init="init()" class="max-w-6xl mx-auto space-y-4">
+  <div class="flex flex-wrap items-center gap-3">
+    <div>
+      <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100">Recruitment</h2>
+      <p class="text-sm text-gray-500 dark:text-gray-400">Simple CV and candidate database for consultant sourcing.</p>
+    </div>
+    <div class="flex-1"></div>
+    <input type="file" x-ref="cvInput" accept=".pdf,.docx,.txt" class="hidden" @change="importCv($event)">
+    <button @click="newCandidate()"
+            class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+      New Candidate
+    </button>
+    <button @click="$refs.cvInput.click()"
+            class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+      Import CV
+    </button>
+  </div>
+
+  <div x-show="message" class="rounded-lg px-4 py-3 text-sm"
+       :class="messageType === 'error' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'"
+       x-text="message"></div>
+
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <input x-model="filters.search" @keydown.enter="loadCandidates()" placeholder="Search candidates..."
+             class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+      <input x-model="filters.skill_text" @keydown.enter="loadCandidates()" placeholder="Skill text"
+             class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+      <input x-model="filters.sap_module_text" @keydown.enter="loadCandidates()" placeholder="SAP module text"
+             class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+      <input x-model="filters.language_text" @keydown.enter="loadCandidates()" placeholder="Language text"
+             class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <input x-model="filters.country" @keydown.enter="loadCandidates()" placeholder="Country"
+             class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+      <input x-model="filters.seniority" @keydown.enter="loadCandidates()" placeholder="Seniority"
+             class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+      <select x-model="filters.work_mode" @change="loadCandidates()"
+              class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+        <option value="">Any work mode</option>
+        <option value="Remote">Remote</option>
+        <option value="Hybrid">Hybrid</option>
+        <option value="Onsite">Onsite</option>
+        <option value="Any">Any</option>
+      </select>
+      <div class="grid grid-cols-2 gap-2">
+        <input x-model="filters.max_hourly_rate" @keydown.enter="loadCandidates()" placeholder="Max hourly"
+               class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+        <input x-model="filters.max_daily_rate" @keydown.enter="loadCandidates()" placeholder="Max daily"
+               class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+      </div>
+    </div>
+    <div class="flex flex-wrap items-center gap-2 justify-end">
+      <span class="text-sm text-gray-500 dark:text-gray-400 mr-2" x-text="count + ' candidate(s)'"></span>
+      <button @click="loadCandidates()"
+              class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+        Search
+      </button>
+      <button @click="clearFilters()"
+              class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition">
+        Clear Filters
+      </button>
+      <button @click="loadCandidates()"
+              class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition">
+        Refresh
+      </button>
+    </div>
+  </div>
+
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-2">
+      <button @click="editSelected()" :disabled="!selected"
+              class="bg-sap-600 hover:bg-sap-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+        Edit Candidate
+      </button>
+      <button @click="openCv()" :disabled="!selected || !selected.cv_file_path"
+              class="bg-gray-200 hover:bg-gray-300 disabled:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 dark:disabled:bg-gray-800 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition">
+        Open CV
+      </button>
+      <button @click="deleteSelected()" :disabled="!selected"
+              class="bg-red-600 hover:bg-red-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+        Delete Candidate
+      </button>
+      <span class="text-sm text-gray-500 dark:text-gray-400" x-show="selected">
+        Selected: <span class="font-medium" x-text="selected ? selected.full_name : ''"></span>
+      </span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <thead class="bg-gray-50 dark:bg-gray-700/50">
+          <tr>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Full name</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Main role</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Skills</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">SAP modules</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Phone</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Email</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Country</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Languages</th>
+            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400">Hourly</th>
+            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400">Daily</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Currency</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Work mode</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Updated</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+          <template x-for="candidate in candidates" :key="candidate.id">
+            <tr @click="selectCandidate(candidate)" @dblclick="editCandidate(candidate)"
+                :class="selected && selected.id === candidate.id ? 'bg-sap-50 dark:bg-sap-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'"
+                class="cursor-pointer">
+              <td class="px-4 py-3 text-sm font-semibold text-gray-900 dark:text-gray-100" x-text="candidate.full_name"></td>
+              <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300" x-text="candidate.main_role"></td>
+              <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 max-w-xs truncate" x-text="candidate.skills"></td>
+              <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 max-w-xs truncate" x-text="candidate.sap_modules"></td>
+              <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300" x-text="candidate.phone"></td>
+              <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300" x-text="candidate.email"></td>
+              <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300" x-text="candidate.country"></td>
+              <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300" x-text="candidate.languages"></td>
+              <td class="px-4 py-3 text-sm text-right text-gray-700 dark:text-gray-300" x-text="formatRate(candidate.rate_hour)"></td>
+              <td class="px-4 py-3 text-sm text-right text-gray-700 dark:text-gray-300" x-text="formatRate(candidate.rate_day)"></td>
+              <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300" x-text="candidate.currency"></td>
+              <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300" x-text="candidate.work_mode"></td>
+              <td class="px-4 py-3 text-xs text-gray-500 dark:text-gray-400" x-text="formatDate(candidate.updated_at)"></td>
+            </tr>
+          </template>
+          <tr x-show="candidates.length === 0">
+            <td colspan="13" class="px-4 py-8 text-center text-sm text-gray-400 dark:text-gray-500">
+              No candidates for the current filters.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div x-show="showForm" x-transition class="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-[980px] max-w-[96vw] max-h-[92vh] overflow-y-auto p-6" @click.outside="showForm = false">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100" x-text="form.id ? 'Edit candidate' : 'New candidate'"></h3>
+          <p class="text-xs text-gray-500 dark:text-gray-400" x-show="form.cv_file_path && !form.id">CV imported for review. Save manually to create the candidate.</p>
+        </div>
+        <button @click="showForm = false" class="text-sm text-gray-500 dark:text-gray-400 hover:underline">Close</button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Full name *</label>
+          <input x-model="form.full_name" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Email</label>
+          <input x-model="form.email" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Phone</label>
+          <input x-model="form.phone" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">LinkedIn</label>
+          <input x-model="form.linkedin" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Country</label>
+          <input x-model="form.country" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">City</label>
+          <input x-model="form.city" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Timezone</label>
+          <input x-model="form.timezone" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Main role</label>
+          <input x-model="form.main_role" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Seniority</label>
+          <input x-model="form.seniority" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Years experience</label>
+          <input x-model="form.years_experience" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Work mode</label>
+          <select x-model="form.work_mode" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+            <option value="Remote">Remote</option>
+            <option value="Hybrid">Hybrid</option>
+            <option value="Onsite">Onsite</option>
+            <option value="Any">Any</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Currency</label>
+          <select x-model="form.currency" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+            <option value="EUR">EUR</option>
+            <option value="USD">USD</option>
+            <option value="GBP">GBP</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Desired hourly rate</label>
+          <input x-model="form.rate_hour" type="number" min="0" step="0.01" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Desired daily rate</label>
+          <input x-model="form.rate_day" type="number" min="0" step="0.01" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
+        </div>
+        <div class="md:col-span-3">
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">CV file path</label>
+          <input x-model="form.cv_file_path" readonly class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Skills</label>
+          <textarea x-model="form.skills" rows="3" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">SAP modules</label>
+          <textarea x-model="form.sap_modules" rows="3" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Languages</label>
+          <textarea x-model="form.languages" rows="3" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Internal notes</label>
+          <textarea x-model="form.notes" rows="3" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"></textarea>
+        </div>
+        <div class="md:col-span-2">
+          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Extracted CV text</label>
+          <textarea x-model="form.cv_text" rows="7" readonly class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-mono bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300"></textarea>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-3 mt-4">
+        <button @click="showForm = false" class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Cancel</button>
+        <button @click="saveCandidate()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Save Candidate</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function recruitmentApp() {
+  return {
+    candidates: [],
+    selected: null,
+    count: 0,
+    showForm: false,
+    message: '',
+    messageType: 'success',
+    filters: {
+      search: '',
+      skill_text: '',
+      sap_module_text: '',
+      language_text: '',
+      country: '',
+      seniority: '',
+      work_mode: '',
+      max_hourly_rate: '',
+      max_daily_rate: '',
+    },
+    form: {},
+
+    init() {
+      this.resetForm();
+      this.loadCandidates();
+    },
+
+    resetForm() {
+      this.form = {
+        id: null,
+        full_name: '',
+        email: '',
+        phone: '',
+        linkedin: '',
+        country: '',
+        city: '',
+        timezone: '',
+        main_role: '',
+        seniority: '',
+        skills: '',
+        sap_modules: '',
+        languages: '',
+        years_experience: '',
+        work_mode: 'Any',
+        rate_hour: '',
+        rate_day: '',
+        currency: 'EUR',
+        notes: '',
+        cv_file_path: '',
+        cv_text: '',
+      };
+    },
+
+    setMessage(text, type='success') {
+      this.message = text;
+      this.messageType = type;
+      if (text) setTimeout(() => this.message = '', 5000);
+    },
+
+    async loadCandidates() {
+      const params = new URLSearchParams();
+      for (const [key, value] of Object.entries(this.filters)) {
+        if (value !== '' && value !== null && value !== undefined) params.set(key, value);
+      }
+      const resp = await fetch('/api/recruitment/candidates?' + params.toString());
+      const data = await resp.json();
+      if (!resp.ok) {
+        this.setMessage(data.error || 'Could not load candidates.', 'error');
+        return;
+      }
+      this.candidates = data.candidates || [];
+      this.count = data.count || this.candidates.length;
+      if (this.selected && !this.candidates.find(candidate => candidate.id === this.selected.id)) {
+        this.selected = null;
+      }
+    },
+
+    clearFilters() {
+      for (const key of Object.keys(this.filters)) this.filters[key] = '';
+      this.loadCandidates();
+    },
+
+    selectCandidate(candidate) {
+      this.selected = candidate;
+    },
+
+    newCandidate() {
+      this.resetForm();
+      this.showForm = true;
+    },
+
+    editSelected() {
+      if (this.selected) this.editCandidate(this.selected);
+    },
+
+    editCandidate(candidate) {
+      this.form = {...candidate};
+      this.form.rate_hour = candidate.rate_hour ?? '';
+      this.form.rate_day = candidate.rate_day ?? '';
+      this.showForm = true;
+    },
+
+    async saveCandidate() {
+      const payload = {...this.form};
+      delete payload.id;
+      delete payload.created_at;
+      delete payload.updated_at;
+      const isUpdate = !!this.form.id;
+      const url = isUpdate ? '/api/recruitment/candidates/' + this.form.id : '/api/recruitment/candidates';
+      const resp = await fetch(url, {
+        method: isUpdate ? 'PUT' : 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        this.setMessage(data.error || 'Could not save candidate.', 'error');
+        return;
+      }
+      this.showForm = false;
+      this.selected = data;
+      this.setMessage('Candidate saved.');
+      await this.loadCandidates();
+    },
+
+    async deleteSelected() {
+      if (!this.selected) return;
+      if (!confirm('Delete candidate "' + this.selected.full_name + '"? The CV file will not be deleted.')) return;
+      const resp = await fetch('/api/recruitment/candidates/' + this.selected.id, {method: 'DELETE'});
+      const data = await resp.json();
+      if (!resp.ok) {
+        this.setMessage(data.error || 'Could not delete candidate.', 'error');
+        return;
+      }
+      this.selected = null;
+      this.setMessage('Candidate deleted.');
+      await this.loadCandidates();
+    },
+
+    async importCv(event) {
+      const file = event.target.files[0];
+      event.target.value = '';
+      if (!file) return;
+      const body = new FormData();
+      body.append('file', file);
+      const resp = await fetch('/api/recruitment/cv/import', {method: 'POST', body});
+      const data = await resp.json();
+      if (!resp.ok) {
+        this.setMessage(data.error || 'Could not import CV.', 'error');
+        return;
+      }
+      this.resetForm();
+      this.form = {...this.form, ...(data.candidate || {})};
+      this.showForm = true;
+      this.setMessage(data.error || 'CV imported. Review and save manually.', data.error ? 'error' : 'success');
+    },
+
+    async openCv() {
+      if (!this.selected) return;
+      const resp = await fetch('/api/recruitment/candidates/' + this.selected.id + '/open-cv', {method: 'POST'});
+      const data = await resp.json();
+      if (!resp.ok) {
+        this.setMessage(data.error || 'Could not open CV.', 'error');
+        return;
+      }
+      this.setMessage('CV open request sent.');
+    },
+
+    formatRate(value) {
+      if (value === null || value === undefined || value === '') return '';
+      return Number(value).toFixed(2);
+    },
+
+    formatDate(value) {
+      if (!value) return '';
+      try {
+        return new Date(value).toLocaleString();
+      } catch (e) {
+        return value;
+      }
+    },
+  }
+}
+</script>
+{% endblock %}

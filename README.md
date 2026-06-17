@@ -1,6 +1,6 @@
 # SAP IS-U Assistant
 
-SAP IS-U Assistant is a local, AI-assisted technical workbench for SAP IS-U consulting. It combines a structured knowledge base, RAG chat, semantic retrieval, incident registration, client-isolated evidence storage, research agents, Kanban operations, finance utilities and IP Box evidence reporting.
+SAP IS-U Assistant is a local, AI-assisted technical workbench for SAP IS-U consulting. It combines a structured knowledge base, RAG chat, semantic retrieval, incident registration, client-isolated evidence storage, research agents, recruitment support, Kanban operations, finance utilities and IP Box evidence reporting.
 
 The tool is implemented as company-developed internal software with an external LLM provider. Its differentiating value is in the orchestration layer, SAP IS-U data model, client namespace separation, structured knowledge workflow, incident evidence model, research pipeline, review/indexing controls and reporting assets around software-enabled SAP IS-U technical delivery.
 
@@ -118,6 +118,17 @@ The tool is implemented as company-developed internal software with an external 
 - Bulk delete closed tickets.
 - Automatic cleanup of old closed tickets.
 
+### Recruitment
+
+- Simple candidate and CV database under `data/recruitment/candidates.db`.
+- Original CV storage under `data/recruitment/cvs/`.
+- PDF, DOCX and TXT CV import with local text extraction.
+- Rule-based CV autofill for name, email, phone, LinkedIn, main role, seniority, years of experience, rates and currency.
+- Manual save workflow: importing a CV opens a prefilled candidate form but does not create a candidate until the user saves it.
+- Search across candidate fields and extracted CV text.
+- Combinable filters for skill text, SAP module text, language text, country, seniority, work mode and maximum hourly/daily rate.
+- No ranking, matching score, candidate pipeline, availability tracking, margin calculation, profit estimation or AI-generated candidate scoring in this version.
+
 ### Finance
 
 - Personal/business finance support module.
@@ -166,6 +177,11 @@ FastAPI Routers
     |       +-- Usage evidence review UI
     |       +-- JSONL usage logs
     |       +-- Monthly Markdown/CSV reports
+    |
+    +-- Recruitment
+    |       +-- Candidate SQLite database
+    |       +-- CV file storage and local parsing
+    |       +-- Rule-based form autofill
     |
     +-- Kanban / Finance / Settings
 ```
@@ -247,6 +263,7 @@ src/
       kanban.py
       incidents.py
       research.py
+      recruitment.py
       finance.py
       settings.py
     templates/
@@ -258,6 +275,7 @@ src/
       incidents.html
       incident_detail.html
       ipbox_dossier.html
+      recruitment.html
       finance_*.html
       settings.html
   assistant/
@@ -277,6 +295,15 @@ src/
   kanban/
   finance/
   shared/
+core/
+  recruitment/
+    candidate_manager.py
+    cv_parser.py
+    cv_autofill.py
+ui/
+  recruitment/
+    candidates_tab.py
+    candidate_form.py
 docs/
   ip_box/
 reports/
@@ -303,6 +330,9 @@ data/
       uploads/
   research/
     source_registry.sqlite
+  recruitment/
+    candidates.db
+    cvs/
   ip_box/
     usage_logs/
   ipbox/
@@ -397,6 +427,19 @@ Standard KB and client-specific KB are separate. Client incidents and uploaded e
 | POST | `/api/kanban/import-csv` | Import CSV |
 | GET | `/api/kanban/export-csv` | Export CSV |
 
+### Recruitment
+
+| Method | Route | Description |
+| --- | --- | --- |
+| GET | `/recruitment` | Candidate database page |
+| GET | `/api/recruitment/candidates` | List/search/filter candidates |
+| POST | `/api/recruitment/candidates` | Create candidate |
+| GET | `/api/recruitment/candidates/{id}` | Get candidate |
+| PUT | `/api/recruitment/candidates/{id}` | Update candidate |
+| DELETE | `/api/recruitment/candidates/{id}` | Delete candidate |
+| POST | `/api/recruitment/cv/import` | Import PDF/DOCX/TXT CV and return autofill draft |
+| POST | `/api/recruitment/candidates/{id}/open-cv` | Open stored CV file with the local OS default app |
+
 ### Finance and Settings
 
 Finance routes cover expenses, invoices, uploads, OCR, summaries, CSV exports and invoice PDF generation. Settings routes cover clients, Qdrant URL, OpenAI API key, active client and Standard KB toggle.
@@ -412,6 +455,16 @@ Finance routes cover expenses, invoices, uploads, OCR, summaries, CSV exports an
 7. Monitor Topic Scout, Source Crawler, Topic Extractor and Run Queuer.
 
 For the curated catalog, use `Run Full Catalog`. Existing KB items are deduplicated/versioned; a full reset is not required.
+
+## Recruitment Usage
+
+1. Open `http://localhost:8000/recruitment`.
+2. Use `Import CV` to select a PDF, DOCX or TXT file.
+3. Review the extracted text and rule-based autofill fields.
+4. Save manually to create the candidate.
+5. Use search and filters to find candidates by free text, skills, SAP module text, language, country, seniority, work mode or maximum rate.
+
+The Recruitment module intentionally stores only candidate database fields and original CV paths. It does not perform AI matching, ranking, pipeline management, availability tracking or profitability calculations.
 
 ## IP Box Evidence Usage Logging
 
@@ -483,6 +536,7 @@ Focused tests:
 pytest -q tests/test_research_pipeline.py
 pytest -q tests/test_ipbox_usage_reporting.py
 pytest -q tests/test_incidents.py
+pytest -q tests/test_recruitment.py
 pytest -q tests/test_ui_controls.py
 ```
 
@@ -491,6 +545,7 @@ Some finance/OCR tests are slower because they exercise OCR-heavy paths.
 ## Evidence and Compliance Notes
 
 - Do not store client confidential content in Standard KB.
+- Do not commit real candidate CVs, phone numbers, emails or recruitment records.
 - Do not include raw client data in advisor packs without review and anonymisation.
 - Do not invent evidence, dates, screenshots, usage logs, commits or time records.
 - SAP, OpenAI, Qdrant and open-source dependencies are third-party components.

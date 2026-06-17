@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sap-isu-assistant"
-version = "0.7.0"
-description = "SAP IS-U Assistant with AI-powered knowledge base, incidents, IP Box evidence, finance and Kanban"
+version = "0.8.0"
+description = "SAP IS-U Assistant with AI-powered knowledge base, incidents, IP Box evidence, recruitment, finance and Kanban"
 requires-python = ">=3.11"
 dependencies = [
     "openai>=1.50.0",
@@ -41,4 +41,4 @@ addopts = "-v --strict-markers"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["src*"]
+include = ["src*", "core*", "ui*"]
