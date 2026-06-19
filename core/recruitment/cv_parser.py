@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt"}
+SUPPORTED_EXTENSIONS = {".pdf", ".doc", ".docx", ".txt"}
 
 
 def _safe_filename(name: str) -> str:
@@ -37,6 +37,8 @@ def extract_text_from_file(file_path: Path | str) -> tuple[str, str | None]:
             return _extract_pdf(path), None
         if suffix == ".docx":
             return _extract_docx(path), None
+        if suffix == ".doc":
+            return _extract_doc(path), None
         return "", f"Unsupported CV file type: {suffix or 'unknown'}."
     except Exception as exc:
         return "", f"CV file was stored, but text extraction failed: {exc}"
@@ -78,4 +80,46 @@ def _extract_docx(path: Path) -> str:
     from docx import Document
 
     document = Document(str(path))
-    return "\n".join(paragraph.text for paragraph in document.paragraphs if paragraph.text.strip())
+    parts = [paragraph.text for paragraph in document.paragraphs if paragraph.text.strip()]
+    for table in document.tables:
+        parts.extend(_extract_docx_table(table))
+    return "\n".join(part.strip() for part in parts if part.strip())
+
+
+def _extract_docx_table(table) -> list[str]:
+    parts: list[str] = []
+    for row in table.rows:
+        cells = []
+        for cell in row.cells:
+            cell_text = "\n".join(paragraph.text for paragraph in cell.paragraphs if paragraph.text.strip())
+            if cell_text.strip():
+                cells.append(cell_text.strip())
+            for nested in cell.tables:
+                parts.extend(_extract_docx_table(nested))
+        if cells:
+            parts.append(" | ".join(cells))
+    return parts
+
+
+def _extract_doc(path: Path) -> str:
+    import sys
+
+    if not sys.platform.startswith("win"):
+        raise RuntimeError("Legacy .doc extraction requires Microsoft Word on Windows.")
+    try:
+        import win32com.client  # type: ignore[import-not-found]
+    except Exception as exc:
+        raise RuntimeError("Legacy .doc extraction requires pywin32 and Microsoft Word.") from exc
+
+    word = None
+    document = None
+    try:
+        word = win32com.client.Dispatch("Word.Application")
+        word.Visible = False
+        document = word.Documents.Open(str(path), ReadOnly=True, AddToRecentFiles=False)
+        return str(document.Content.Text or "").replace("\r", "\n")
+    finally:
+        if document is not None:
+            document.Close(False)
+        if word is not None:
+            word.Quit()

@@ -8,7 +8,7 @@
       <p class="text-sm text-gray-500 dark:text-gray-400">Simple CV and candidate database for consultant sourcing.</p>
     </div>
     <div class="flex-1"></div>
-    <input type="file" x-ref="cvInput" accept=".pdf,.docx,.txt" class="hidden" @change="importCv($event)">
+    <input type="file" x-ref="cvInput" accept=".pdf,.doc,.docx,.txt" class="hidden" @change="importCv($event)">
     <button @click="newCandidate()"
             class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
       New Candidate
@@ -95,60 +95,89 @@
           <tr>
             <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Full name</th>
             <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Main role</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Skills</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">SAP modules</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Phone</th>
             <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Email</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Country</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Languages</th>
-            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400">Hourly</th>
-            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400">Daily</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Currency</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Phone</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">LinkedIn</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Location</th>
             <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Work mode</th>
             <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Updated</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-          <template x-for="candidate in candidates" :key="candidate.id">
+          <template x-for="candidate in pagedCandidates" :key="candidate.id">
             <tr @click="selectCandidate(candidate)" @dblclick="editCandidate(candidate)"
                 :class="selected && selected.id === candidate.id ? 'bg-sap-50 dark:bg-sap-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'"
                 class="cursor-pointer">
               <td class="px-4 py-3 text-sm font-semibold text-gray-900 dark:text-gray-100" x-text="candidate.full_name"></td>
               <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300" x-text="candidate.main_role"></td>
-              <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 max-w-xs truncate" x-text="candidate.skills"></td>
-              <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 max-w-xs truncate" x-text="candidate.sap_modules"></td>
-              <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300" x-text="candidate.phone"></td>
               <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300" x-text="candidate.email"></td>
-              <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300" x-text="candidate.country"></td>
-              <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300" x-text="candidate.languages"></td>
-              <td class="px-4 py-3 text-sm text-right text-gray-700 dark:text-gray-300" x-text="formatRate(candidate.rate_hour)"></td>
-              <td class="px-4 py-3 text-sm text-right text-gray-700 dark:text-gray-300" x-text="formatRate(candidate.rate_day)"></td>
-              <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300" x-text="candidate.currency"></td>
+              <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300" x-text="candidate.phone"></td>
+              <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 max-w-xs truncate">
+                <template x-if="candidate.linkedin">
+                  <a :href="externalUrl(candidate.linkedin)" target="_blank" rel="noopener noreferrer"
+                     @click.stop
+                     class="text-sap-600 dark:text-sap-300 hover:underline"
+                     x-text="externalUrl(candidate.linkedin)"></a>
+                </template>
+              </td>
+              <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300" x-text="formatLocation(candidate)"></td>
               <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300" x-text="candidate.work_mode"></td>
               <td class="px-4 py-3 text-xs text-gray-500 dark:text-gray-400" x-text="formatDate(candidate.updated_at)"></td>
             </tr>
           </template>
           <tr x-show="candidates.length === 0">
-            <td colspan="13" class="px-4 py-8 text-center text-sm text-gray-400 dark:text-gray-500">
+            <td colspan="8" class="px-4 py-8 text-center text-sm text-gray-400 dark:text-gray-500">
               No candidates for the current filters.
             </td>
           </tr>
         </tbody>
       </table>
     </div>
+    <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-3">
+      <span class="text-sm text-gray-500 dark:text-gray-400" x-text="paginationLabel()"></span>
+      <div class="flex-1"></div>
+      <label class="text-sm text-gray-500 dark:text-gray-400" for="recruitmentPageSize">Page size</label>
+      <select id="recruitmentPageSize" x-model.number="pageSize" @change="setPageSize(pageSize)"
+              class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-2 py-1.5 text-sm">
+        <option value="5">5</option>
+        <option value="10">10</option>
+        <option value="25">25</option>
+        <option value="50">50</option>
+      </select>
+      <button type="button" @click="goToPage(currentPage - 1)" :disabled="currentPage <= 1"
+              class="bg-gray-200 hover:bg-gray-300 disabled:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 dark:disabled:bg-gray-800 text-gray-700 dark:text-gray-200 px-3 py-1.5 rounded-lg text-sm font-medium transition">
+        Previous Page
+      </button>
+      <span class="text-sm text-gray-600 dark:text-gray-300" x-text="'Page ' + currentPage + ' of ' + totalPages"></span>
+      <button type="button" @click="goToPage(currentPage + 1)" :disabled="currentPage >= totalPages"
+              class="bg-gray-200 hover:bg-gray-300 disabled:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 dark:disabled:bg-gray-800 text-gray-700 dark:text-gray-200 px-3 py-1.5 rounded-lg text-sm font-medium transition">
+        Next Page
+      </button>
+    </div>
   </div>
 
-  <div x-show="showForm" x-transition class="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-[980px] max-w-[96vw] max-h-[92vh] overflow-y-auto p-6" @click.outside="showForm = false">
+  <div x-show="showForm" x-transition @click.prevent.stop class="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-[980px] max-w-[96vw] max-h-[92vh] overflow-y-auto p-6" @click.stop>
       <div class="flex items-center justify-between mb-4">
         <div>
           <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100" x-text="form.id ? 'Edit candidate' : 'New candidate'"></h3>
           <p class="text-xs text-gray-500 dark:text-gray-400" x-show="form.cv_file_path && !form.id">CV imported for review. Save manually to create the candidate.</p>
         </div>
-        <button @click="showForm = false" class="text-sm text-gray-500 dark:text-gray-400 hover:underline">Close</button>
+        <div class="flex items-center gap-2">
+          <button type="button" @click="navigateFormCandidate(-1)" :disabled="!canNavigateFormCandidate(-1)"
+                  class="bg-gray-200 hover:bg-gray-300 disabled:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 dark:disabled:bg-gray-800 text-gray-700 dark:text-gray-200 px-3 py-1.5 rounded-lg text-xs font-medium transition">
+            Previous Candidate
+          </button>
+          <button type="button" @click="navigateFormCandidate(1)" :disabled="!canNavigateFormCandidate(1)"
+                  class="bg-gray-200 hover:bg-gray-300 disabled:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 dark:disabled:bg-gray-800 text-gray-700 dark:text-gray-200 px-3 py-1.5 rounded-lg text-xs font-medium transition">
+            Next Candidate
+          </button>
+          <button @click="closeForm()" class="text-sm text-gray-500 dark:text-gray-400 hover:underline">Close</button>
+        </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <input type="file" x-ref="formCvInput" accept=".pdf,.doc,.docx,.txt" class="hidden" @change="updateFormCv($event)">
         <div>
           <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Full name *</label>
           <input x-model="form.full_name" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
@@ -216,7 +245,13 @@
           <input x-model="form.rate_day" type="number" min="0" step="0.01" class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100">
         </div>
         <div class="md:col-span-3">
-          <label class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">CV file path</label>
+          <div class="flex items-center justify-between gap-3 mb-1">
+            <label class="text-xs font-medium text-gray-500 dark:text-gray-400 block">CV file path</label>
+            <button type="button" @click="$refs.formCvInput.click()"
+                    class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-3 py-1.5 rounded-lg text-xs font-medium transition">
+              Update CV
+            </button>
+          </div>
           <input x-model="form.cv_file_path" readonly class="w-full border dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
         </div>
       </div>
@@ -245,7 +280,7 @@
       </div>
 
       <div class="flex justify-end gap-3 mt-4">
-        <button @click="showForm = false" class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Cancel</button>
+        <button @click="closeForm()" class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Cancel</button>
         <button @click="saveCandidate()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Save Candidate</button>
       </div>
     </div>
@@ -258,9 +293,12 @@ function recruitmentApp() {
     candidates: [],
     selected: null,
     count: 0,
+    pageSize: 10,
+    currentPage: 1,
     showForm: false,
     message: '',
     messageType: 'success',
+    formSnapshot: '',
     filters: {
       search: '',
       skill_text: '',
@@ -273,6 +311,23 @@ function recruitmentApp() {
       max_daily_rate: '',
     },
     form: {},
+
+    get totalPages() {
+      return Math.max(1, Math.ceil(this.candidates.length / Number(this.pageSize || 10)));
+    },
+
+    get pageStartIndex() {
+      if (this.candidates.length === 0) return 0;
+      return (this.currentPage - 1) * Number(this.pageSize || 10);
+    },
+
+    get pageEndIndex() {
+      return Math.min(this.pageStartIndex + Number(this.pageSize || 10), this.candidates.length);
+    },
+
+    get pagedCandidates() {
+      return this.candidates.slice(this.pageStartIndex, this.pageEndIndex);
+    },
 
     init() {
       this.resetForm();
@@ -303,6 +358,7 @@ function recruitmentApp() {
         cv_file_path: '',
         cv_text: '',
       };
+      this.formSnapshot = this.snapshotForm();
     },
 
     setMessage(text, type='success') {
@@ -311,7 +367,7 @@ function recruitmentApp() {
       if (text) setTimeout(() => this.message = '', 5000);
     },
 
-    async loadCandidates() {
+    async loadCandidates(resetPage=true) {
       const params = new URLSearchParams();
       for (const [key, value] of Object.entries(this.filters)) {
         if (value !== '' && value !== null && value !== undefined) params.set(key, value);
@@ -324,6 +380,10 @@ function recruitmentApp() {
       }
       this.candidates = data.candidates || [];
       this.count = data.count || this.candidates.length;
+      if (resetPage) {
+        this.currentPage = 1;
+      }
+      this.clampCurrentPage();
       if (this.selected && !this.candidates.find(candidate => candidate.id === this.selected.id)) {
         this.selected = null;
       }
@@ -332,6 +392,26 @@ function recruitmentApp() {
     clearFilters() {
       for (const key of Object.keys(this.filters)) this.filters[key] = '';
       this.loadCandidates();
+    },
+
+    clampCurrentPage() {
+      if (this.currentPage < 1) this.currentPage = 1;
+      if (this.currentPage > this.totalPages) this.currentPage = this.totalPages;
+    },
+
+    setPageSize(size) {
+      this.pageSize = Number(size || 10);
+      this.currentPage = 1;
+      this.clampCurrentPage();
+    },
+
+    goToPage(page) {
+      this.currentPage = Math.min(Math.max(Number(page || 1), 1), this.totalPages);
+    },
+
+    paginationLabel() {
+      if (this.candidates.length === 0) return 'No candidates to show';
+      return 'Showing ' + (this.pageStartIndex + 1) + '-' + this.pageEndIndex + ' of ' + this.candidates.length;
     },
 
     selectCandidate(candidate) {
@@ -351,7 +431,47 @@ function recruitmentApp() {
       this.form = {...candidate};
       this.form.rate_hour = candidate.rate_hour ?? '';
       this.form.rate_day = candidate.rate_day ?? '';
+      this.formSnapshot = this.snapshotForm();
+      this.syncPageForCandidate(candidate.id);
       this.showForm = true;
+    },
+
+    snapshotForm() {
+      return JSON.stringify(this.form || {});
+    },
+
+    isFormDirty() {
+      return this.snapshotForm() !== this.formSnapshot;
+    },
+
+    closeForm() {
+      this.showForm = false;
+    },
+
+    formCandidateIndex() {
+      if (!this.form || !this.form.id) return -1;
+      return this.candidates.findIndex(candidate => candidate.id === this.form.id);
+    },
+
+    canNavigateFormCandidate(direction) {
+      const index = this.formCandidateIndex();
+      const nextIndex = index + direction;
+      return index >= 0 && nextIndex >= 0 && nextIndex < this.candidates.length;
+    },
+
+    navigateFormCandidate(direction) {
+      if (!this.canNavigateFormCandidate(direction)) return;
+      if (this.isFormDirty() && !confirm('Discard unsaved changes and open another candidate?')) return;
+      const nextCandidate = this.candidates[this.formCandidateIndex() + direction];
+      this.selectCandidate(nextCandidate);
+      this.editCandidate(nextCandidate);
+    },
+
+    syncPageForCandidate(candidateId) {
+      const index = this.candidates.findIndex(candidate => candidate.id === candidateId);
+      if (index >= 0) {
+        this.currentPage = Math.floor(index / Number(this.pageSize || 10)) + 1;
+      }
     },
 
     async saveCandidate() {
@@ -375,6 +495,7 @@ function recruitmentApp() {
       this.selected = data;
       this.setMessage('Candidate saved.');
       await this.loadCandidates();
+      this.syncPageForCandidate(data.id);
     },
 
     async deleteSelected() {
@@ -395,18 +516,56 @@ function recruitmentApp() {
       const file = event.target.files[0];
       event.target.value = '';
       if (!file) return;
+      const data = await this.uploadCv(file);
+      if (!data) return;
+      this.resetForm();
+      this.applyImportedCv(data.candidate || {}, true);
+      this.formSnapshot = this.snapshotForm();
+      this.showForm = true;
+      this.setMessage(data.error || 'CV imported. Review and save manually.', data.error ? 'error' : 'success');
+    },
+
+    async updateFormCv(event) {
+      const file = event.target.files[0];
+      event.target.value = '';
+      if (!file) return;
+      const data = await this.uploadCv(file);
+      if (!data) return;
+      this.applyImportedCv(data.candidate || {}, false);
+      this.setMessage(data.error || 'CV updated in the open form. Save Candidate to persist the change.', data.error ? 'error' : 'success');
+    },
+
+    async uploadCv(file) {
       const body = new FormData();
       body.append('file', file);
       const resp = await fetch('/api/recruitment/cv/import', {method: 'POST', body});
       const data = await resp.json();
       if (!resp.ok) {
         this.setMessage(data.error || 'Could not import CV.', 'error');
-        return;
+        return null;
       }
-      this.resetForm();
-      this.form = {...this.form, ...(data.candidate || {})};
-      this.showForm = true;
-      this.setMessage(data.error || 'CV imported. Review and save manually.', data.error ? 'error' : 'success');
+      return data;
+    },
+
+    externalUrl(value) {
+      const trimmed = (value || '').trim();
+      if (!trimmed) return '';
+      if (/^https?:\/\//i.test(trimmed)) return trimmed;
+      return 'https://' + trimmed.replace(/^\/+/, '');
+    },
+
+    applyImportedCv(candidate, replaceAll) {
+      const preserved = replaceAll ? {} : {
+        id: this.form.id,
+        created_at: this.form.created_at,
+        updated_at: this.form.updated_at,
+      };
+      for (const [key, value] of Object.entries(candidate || {})) {
+        if (key === 'cv_file_path' || key === 'cv_text' || value !== '' && value !== null && value !== undefined) {
+          this.form[key] = value;
+        }
+      }
+      Object.assign(this.form, preserved);
     },
 
     async openCv() {
@@ -432,6 +591,10 @@ function recruitmentApp() {
       } catch (e) {
         return value;
       }
+    },
+
+    formatLocation(candidate) {
+      return [candidate.city, candidate.country].filter(Boolean).join(', ');
     },
   }
 }

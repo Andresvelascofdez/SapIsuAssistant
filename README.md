@@ -122,9 +122,16 @@ The tool is implemented as company-developed internal software with an external 
 
 - Simple candidate and CV database under `data/recruitment/candidates.db`.
 - Original CV storage under `data/recruitment/cvs/`.
-- PDF, DOCX and TXT CV import with local text extraction.
+- PDF, legacy DOC, DOCX and TXT CV import with local text extraction.
+- DOCX table extraction for CVs whose personal data is stored inside Word tables.
 - Rule-based CV autofill for name, email, phone, LinkedIn, main role, seniority, years of experience, rates and currency.
+- CV autofill handles split LinkedIn URLs, Spanish contact labels, language sections, country inference from location/phone clues and profile-level experience statements.
+- Email, phone or LinkedIn is accepted as the minimum candidate contact evidence; missing contact details must be completed manually.
 - Manual save workflow: importing a CV opens a prefilled candidate form but does not create a candidate until the user saves it.
+- Candidate edit form can replace the stored CV path and extracted text without deleting older CV files.
+- Candidate list pagination avoids long unbounded scrolling in filtered and unfiltered views.
+- Candidate edit modal keeps clicks on the backdrop from closing the form or selecting rows behind it.
+- Editable candidate forms support previous/next navigation across the current result set.
 - Search across candidate fields and extracted CV text.
 - Combinable filters for skill text, SAP module text, language text, country, seniority, work mode and maximum hourly/daily rate.
 - No ranking, matching score, candidate pipeline, availability tracking, margin calculation, profit estimation or AI-generated candidate scoring in this version.
@@ -459,7 +466,7 @@ For the curated catalog, use `Run Full Catalog`. Existing KB items are deduplica
 ## Recruitment Usage
 
 1. Open `http://localhost:8000/recruitment`.
-2. Use `Import CV` to select a PDF, DOCX or TXT file.
+2. Use `Import CV` to select a PDF, DOC, DOCX or TXT file.
 3. Review the extracted text and rule-based autofill fields.
 4. Save manually to create the candidate.
 5. Use search and filters to find candidates by free text, skills, SAP module text, language, country, seniority, work mode or maximum rate.

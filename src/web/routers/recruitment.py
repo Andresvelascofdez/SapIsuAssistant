@@ -101,7 +101,7 @@ async def import_candidate_cv(file: UploadFile = File(...)):
     suffix = Path(filename).suffix.lower()
     if suffix not in SUPPORTED_EXTENSIONS:
         return JSONResponse(
-            {"error": "Unsupported CV file type. Use PDF, DOCX or TXT."},
+            {"error": "Unsupported CV file type. Use PDF, DOC, DOCX or TXT."},
             status_code=400,
         )
 
@@ -115,7 +115,7 @@ async def import_candidate_cv(file: UploadFile = File(...)):
     finally:
         tmp_path.unlink(missing_ok=True)
 
-    autofill = autofill_from_text(imported.get("cv_text") or "")
+    autofill = autofill_from_text(imported.get("cv_text") or "", filename_hint=filename)
     return {
         "candidate": {
             **autofill,

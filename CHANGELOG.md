@@ -7,17 +7,28 @@
 - Added a Recruitment module for a simple CV and candidate database.
 - Added SQLite-backed candidate storage under `data/recruitment/candidates.db`.
 - Added original CV storage under `data/recruitment/cvs/`.
-- Added PDF, DOCX and TXT CV import with local text extraction.
+- Added PDF, legacy DOC, DOCX and TXT CV import with local text extraction.
+- Added DOCX table extraction for CVs whose candidate details are stored in Word tables.
 - Added rule-based CV autofill for contact details, LinkedIn, role, seniority, experience, rates and currency.
 - Added manual save behavior for imported CVs so imports prefill a form but do not automatically create candidates.
 - Added candidate search across structured fields and extracted CV text.
 - Added combinable filters for skill text, SAP module text, language text, country, seniority, work mode and maximum hourly/daily rates.
 - Added `/recruitment` UI and JSON APIs for candidate CRUD, CV import and local CV open requests.
 - Documented that Recruitment v1 intentionally excludes AI scoring, matching percentages, pipeline/status tracking, availability management, margins, profit estimates and predefined skill/module taxonomies.
+- Simplified the candidate list view to focus on name, main role and contact/location details.
+- Added CV replacement from the candidate edit form without deleting existing stored CV files.
+- Improved rule-based CV autofill for columnar layouts, spaced-OCR PDFs, country/city headers, remote timezone notation, split year counts and labeled contact fields.
+- Improved rule-based CV autofill for explicit table labels, LinkedIn-derived name fallback, split email/phone lines, company/project false-positive rejection and filename fallback when the CV text omits a reliable name.
+- Allowed LinkedIn to satisfy the minimum candidate contact requirement when email and phone are unavailable.
+- Added paginated candidate list views for unfiltered and filtered results.
+- Rendered LinkedIn values as clickable normalized URLs in the candidate table.
+- Prevented candidate edit/import forms from closing when the user clicks the backdrop.
+- Added previous/next navigation between editable candidate forms in the current result set.
+- Improved CV autofill for split LinkedIn URLs, language-section extraction, Spanish contact labels, country inference from phone/location clues and profile-level years-of-experience priority.
 
 ### Tests and Documentation
 
-- Added dedicated Recruitment tests covering schema creation, validation, CRUD, search, filters, TXT/DOCX/PDF parsing, broken-file handling, rule-based autofill and API behavior.
+- Added dedicated Recruitment tests covering schema creation, validation, CRUD, search, filters, TXT/DOC/DOCX/PDF parsing, DOCX table extraction, broken-file handling, rule-based autofill and API behavior.
 - Updated README with Recruitment capabilities, storage layout, API routes, usage instructions and focused test commands.
 - Updated application version to `v0.8.0`.
 

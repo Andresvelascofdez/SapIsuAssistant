@@ -231,8 +231,8 @@ class CandidateManager:
 
         if not cleaned["full_name"]:
             raise CandidateValidationError("Full name is mandatory.")
-        if not cleaned["email"] and not cleaned["phone"]:
-            raise CandidateValidationError("Email or phone is mandatory.")
+        if not cleaned["email"] and not cleaned["phone"] and not cleaned["linkedin"]:
+            raise CandidateValidationError("Email, phone or LinkedIn is mandatory.")
 
         if not cleaned["work_mode"]:
             cleaned["work_mode"] = "Any"
