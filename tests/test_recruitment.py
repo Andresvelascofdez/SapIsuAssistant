@@ -114,8 +114,13 @@ class TestCandidateManager:
         )
 
         assert [c.full_name for c in manager.list_candidates(search="EABL")] == ["Jane Candidate"]
+        assert [c.full_name for c in manager.list_candidates(filters={"cv_text": "meter reading"})] == [
+            "Jane Candidate"
+        ]
+        assert manager.list_candidates(filters={"cv_text": "meter python"}) == []
         filtered = manager.list_candidates(
             filters={
+                "cv_text": "EABL",
                 "skill_text": "debug",
                 "sap_module_text": "billing",
                 "language_text": "spanish",
@@ -603,6 +608,7 @@ class TestRecruitmentApi:
             "Import CV",
             "Open CV",
             "Update CV",
+            "CV free text",
             "Previous Candidate",
             "Next Candidate",
             "Previous Page",
@@ -637,6 +643,7 @@ class TestRecruitmentApi:
                 "work_mode": "Remote",
                 "rate_hour": 50,
                 "rate_day": 400,
+                "cv_text": "Deep EABL meter reading implementation background.",
             },
         )
         assert created.status_code == 200
@@ -647,6 +654,7 @@ class TestRecruitmentApi:
             "/api/recruitment/candidates",
             params={
                 "search": "jane",
+                "cv_text": "meter reading",
                 "skill_text": "debug",
                 "sap_module_text": "billing",
                 "language_text": "spanish",
@@ -724,6 +732,7 @@ class TestRecruitmentApi:
         assert "cv_text" in FORM_FIELDS
         assert WORK_MODE_OPTIONS == ("Remote", "Hybrid", "Onsite", "Any")
         assert CURRENCY_OPTIONS == ("EUR", "USD", "GBP", "Other")
+        assert "cv_text" in FILTER_FIELDS
         assert "sap_module_text" in FILTER_FIELDS
         assert "updated_at" in TABLE_COLUMNS
         assert "skills" not in TABLE_COLUMNS

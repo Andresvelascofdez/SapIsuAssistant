@@ -14,6 +14,7 @@ TABLE_COLUMNS = (
 
 FILTER_FIELDS = (
     "search",
+    "cv_text",
     "skill_text",
     "sap_module_text",
     "language_text",

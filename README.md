@@ -133,6 +133,7 @@ The tool is implemented as company-developed internal software with an external 
 - Candidate edit modal keeps clicks on the backdrop from closing the form or selecting rows behind it.
 - Editable candidate forms support previous/next navigation across the current result set.
 - Search across candidate fields and extracted CV text.
+- Dedicated CV free-text filter for arbitrary words contained in the extracted CV body, combinable with the structured filters.
 - Combinable filters for skill text, SAP module text, language text, country, seniority, work mode and maximum hourly/daily rate.
 - No ranking, matching score, candidate pipeline, availability tracking, margin calculation, profit estimation or AI-generated candidate scoring in this version.
 

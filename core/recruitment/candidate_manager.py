@@ -305,6 +305,7 @@ class CandidateManager:
             params.extend([f"%{search.lower()}%"] * len(clauses))
 
         filters = filters or {}
+        self._append_cv_text_filter(where, params, filters.get("cv_text"))
         self._append_text_filter(where, params, "skills", filters.get("skill_text"))
         self._append_text_filter(where, params, "sap_modules", filters.get("sap_module_text"))
         self._append_text_filter(where, params, "languages", filters.get("language_text"))
@@ -344,3 +345,15 @@ class CandidateManager:
         if text:
             where.append(f"LOWER(COALESCE({field}, '')) LIKE ?")
             params.append(f"%{text.lower()}%")
+
+    @staticmethod
+    def _append_cv_text_filter(where: list[str], params: list[Any], value: Any) -> None:
+        text = (value or "").strip()
+        if not text:
+            return
+        terms = [term for term in text.lower().split() if term]
+        if not terms:
+            return
+        clauses = ["LOWER(COALESCE(cv_text, '')) LIKE ?" for _ in terms]
+        where.append("(" + " AND ".join(clauses) + ")")
+        params.extend(f"%{term}%" for term in terms)

@@ -29,6 +29,7 @@ def _candidate_to_dict(candidate) -> dict:
 def _filters_from_request(request: Request) -> dict:
     params = request.query_params
     return {
+        "cv_text": params.get("cv_text"),
         "skill_text": params.get("skill_text"),
         "sap_module_text": params.get("sap_module_text"),
         "language_text": params.get("language_text"),

@@ -27,14 +27,16 @@
     <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
       <input x-model="filters.search" @keydown.enter="loadCandidates()" placeholder="Search candidates..."
              class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
+      <input x-model="filters.cv_text" @keydown.enter="loadCandidates()" placeholder="CV free text"
+             class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
       <input x-model="filters.skill_text" @keydown.enter="loadCandidates()" placeholder="Skill text"
              class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
       <input x-model="filters.sap_module_text" @keydown.enter="loadCandidates()" placeholder="SAP module text"
              class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
-      <input x-model="filters.language_text" @keydown.enter="loadCandidates()" placeholder="Language text"
-             class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
     </div>
     <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <input x-model="filters.language_text" @keydown.enter="loadCandidates()" placeholder="Language text"
+             class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
       <input x-model="filters.country" @keydown.enter="loadCandidates()" placeholder="Country"
              class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
       <input x-model="filters.seniority" @keydown.enter="loadCandidates()" placeholder="Seniority"
@@ -301,6 +303,7 @@ function recruitmentApp() {
     formSnapshot: '',
     filters: {
       search: '',
+      cv_text: '',
       skill_text: '',
       sap_module_text: '',
       language_text: '',
