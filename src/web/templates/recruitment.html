@@ -25,21 +25,21 @@
 
   <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 space-y-3">
     <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-      <input x-model="filters.search" @keydown.enter="loadCandidates()" placeholder="Search candidates..."
+      <input x-model="filters.search" @input.debounce.400ms="loadCandidates()" @keydown.enter="loadCandidates()" placeholder="Search candidates..."
              class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
-      <input x-model="filters.cv_text" @keydown.enter="loadCandidates()" placeholder="CV free text"
+      <input x-model="filters.cv_text" @input.debounce.400ms="loadCandidates()" @keydown.enter="loadCandidates()" placeholder="CV free text"
              class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
-      <input x-model="filters.skill_text" @keydown.enter="loadCandidates()" placeholder="Skill text"
+      <input x-model="filters.skill_text" @input.debounce.400ms="loadCandidates()" @keydown.enter="loadCandidates()" placeholder="Skill text"
              class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
-      <input x-model="filters.sap_module_text" @keydown.enter="loadCandidates()" placeholder="SAP module text"
+      <input x-model="filters.sap_module_text" @input.debounce.400ms="loadCandidates()" @keydown.enter="loadCandidates()" placeholder="SAP module text"
              class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
     </div>
     <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-      <input x-model="filters.language_text" @keydown.enter="loadCandidates()" placeholder="Language text"
+      <input x-model="filters.language_text" @input.debounce.400ms="loadCandidates()" @keydown.enter="loadCandidates()" placeholder="Language text"
              class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
-      <input x-model="filters.country" @keydown.enter="loadCandidates()" placeholder="Country"
+      <input x-model="filters.country" @input.debounce.400ms="loadCandidates()" @keydown.enter="loadCandidates()" placeholder="Country"
              class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
-      <input x-model="filters.seniority" @keydown.enter="loadCandidates()" placeholder="Seniority"
+      <input x-model="filters.seniority" @input.debounce.400ms="loadCandidates()" @keydown.enter="loadCandidates()" placeholder="Seniority"
              class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
       <select x-model="filters.work_mode" @change="loadCandidates()"
               class="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 text-sm">
@@ -57,7 +57,7 @@
       </div>
     </div>
     <div class="flex flex-wrap items-center gap-2 justify-end">
-      <span class="text-sm text-gray-500 dark:text-gray-400 mr-2" x-text="count + ' candidate(s)'"></span>
+      <span class="text-sm text-gray-500 dark:text-gray-400 mr-2" x-text="isLoading ? 'Searching...' : count + ' candidate(s)'"></span>
       <button @click="loadCandidates()"
               class="bg-sap-600 hover:bg-sap-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
         Search
@@ -301,6 +301,8 @@ function recruitmentApp() {
     message: '',
     messageType: 'success',
     formSnapshot: '',
+    isLoading: false,
+    loadRequestId: 0,
     filters: {
       search: '',
       cv_text: '',
@@ -371,24 +373,31 @@ function recruitmentApp() {
     },
 
     async loadCandidates(resetPage=true) {
+      const requestId = ++this.loadRequestId;
+      this.isLoading = true;
       const params = new URLSearchParams();
       for (const [key, value] of Object.entries(this.filters)) {
         if (value !== '' && value !== null && value !== undefined) params.set(key, value);
       }
-      const resp = await fetch('/api/recruitment/candidates?' + params.toString());
-      const data = await resp.json();
-      if (!resp.ok) {
-        this.setMessage(data.error || 'Could not load candidates.', 'error');
-        return;
-      }
-      this.candidates = data.candidates || [];
-      this.count = data.count || this.candidates.length;
-      if (resetPage) {
-        this.currentPage = 1;
-      }
-      this.clampCurrentPage();
-      if (this.selected && !this.candidates.find(candidate => candidate.id === this.selected.id)) {
-        this.selected = null;
+      try {
+        const resp = await fetch('/api/recruitment/candidates?' + params.toString());
+        const data = await resp.json();
+        if (requestId !== this.loadRequestId) return;
+        if (!resp.ok) {
+          this.setMessage(data.error || 'Could not load candidates.', 'error');
+          return;
+        }
+        this.candidates = data.candidates || [];
+        this.count = data.count || this.candidates.length;
+        if (resetPage) {
+          this.currentPage = 1;
+        }
+        this.clampCurrentPage();
+        if (this.selected && !this.candidates.find(candidate => candidate.id === this.selected.id)) {
+          this.selected = null;
+        }
+      } finally {
+        if (requestId === this.loadRequestId) this.isLoading = false;
       }
     },
 

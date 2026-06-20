@@ -95,7 +95,7 @@ class TestCandidateManager:
                 "work_mode": "Remote",
                 "rate_hour": 60,
                 "rate_day": 480,
-                "cv_text": "Deep EABL and meter reading background.",
+                "cv_text": "Deep EABL and meter reading background for SAP IS-U projects.",
             }
         )
         manager.create_candidate(
@@ -114,6 +114,7 @@ class TestCandidateManager:
         )
 
         assert [c.full_name for c in manager.list_candidates(search="EABL")] == ["Jane Candidate"]
+        assert [c.full_name for c in manager.list_candidates(filters={"cv_text": "IS-U"})] == ["Jane Candidate"]
         assert [c.full_name for c in manager.list_candidates(filters={"cv_text": "meter reading"})] == [
             "Jane Candidate"
         ]
@@ -609,6 +610,7 @@ class TestRecruitmentApi:
             "Open CV",
             "Update CV",
             "CV free text",
+            "Searching...",
             "Previous Candidate",
             "Next Candidate",
             "Previous Page",
@@ -619,6 +621,7 @@ class TestRecruitmentApi:
         ):
             assert text in resp.text
         assert "updateFormCv($event)" in resp.text
+        assert '@input.debounce.400ms="loadCandidates()"' in resp.text
         assert "pagedCandidates" in resp.text
         assert "@click.outside" not in resp.text
         assert "externalUrl(candidate.linkedin)" in resp.text

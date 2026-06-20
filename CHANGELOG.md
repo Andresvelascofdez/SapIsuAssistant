@@ -25,7 +25,7 @@
 - Prevented candidate edit/import forms from closing when the user clicks the backdrop.
 - Added previous/next navigation between editable candidate forms in the current result set.
 - Improved CV autofill for split LinkedIn URLs, language-section extraction, Spanish contact labels, country inference from phone/location clues and profile-level years-of-experience priority.
-- Added a dedicated CV free-text filter so arbitrary words in the extracted CV body can be searched independently from skill text.
+- Added a dedicated CV free-text filter so arbitrary words in the extracted CV body can be searched independently from skill text, with debounced UI searching while typing.
 
 ### Tests and Documentation
 
