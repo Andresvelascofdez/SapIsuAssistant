@@ -502,6 +502,111 @@ class TestCvParserAndAutofill:
         assert data["country"] == "Spain"
         assert data["main_role"] == "Freelance ABAP MM/WORKFLOW"
 
+    def test_autofill_uses_filename_when_summary_has_soft_skill_phrases(self):
+        text = "\n".join(
+            [
+                "PROFESSIONAL SUMMARY",
+                "Senior SAP ABAP Consultant with 10+ years of experience in ABAP development.",
+                "WORK HISTORY",
+                "Senior SAP Consultant, 05/2017 to Current",
+                "Performance Improvement.",
+                "Telecom-Rome",
+                "SAP ABAP Developer, 10/2016 to 12/2016",
+                "Data Dictionary.",
+                "Drafting of technical analyses",
+                "CONTACT",
+                "Address: 00010, Sample City Lazio",
+                "Phone: +39 3899818719",
+                "Email: sample.consultant@example.test",
+            ]
+        )
+
+        data = autofill_from_text(text, filename_hint="Luca_Sample_Resume.pdf")
+
+        assert data["full_name"] == "Luca Sample"
+        assert data["main_role"] == "Senior SAP ABAP Consultant"
+        assert data["country"] == "Italy"
+
+    def test_autofill_extracts_role_from_summary_line_with_years_after_name(self):
+        text = "\n".join(
+            [
+                "ARUN SAMPLE",
+                "Contact No: +34-631137365 LinkedIn: www.linkedin.com/in/arun-sample Email: sample.abap@example.test",
+                "Professional Summary",
+                "Senior SAP ABAP Developer with over 11 years of hands-on experience in SAP S/4HANA and ECC environments. Expert in",
+                "designing, developing, and optimizing custom SAP solutions.",
+                "Brownfield implementations, custom code remediation, and integration projects.",
+            ]
+        )
+
+        data = autofill_from_text(text)
+
+        assert data["full_name"] == "ARUN SAMPLE"
+        assert data["main_role"] == "Senior SAP ABAP Developer"
+        assert data["years_experience"] == "over 11 years"
+
+    def test_autofill_handles_surname_name_and_job_function_table_labels(self):
+        text = "\n".join(
+            [
+                "Personal Information",
+                "Surname / Name | Silva/Alex | Silva/Alex",
+                "Date of Birth | 28/09/1974 | 28/09/1974",
+                "Summary",
+                "Job or Function | Senior Abap Consultant | Senior Abap Consultant",
+                "Profile and Background",
+                "SAP Skills | Extensive experience (24 years) in ABAP developments",
+            ]
+        )
+
+        data = autofill_from_text(text)
+
+        assert data["full_name"] == "Alex Silva"
+        assert data["main_role"] == "Senior Abap Consultant"
+        assert data["years_experience"] == "24 years"
+
+    def test_autofill_handles_personal_details_before_name_and_skills(self):
+        text = "\n".join(
+            [
+                "PERSONAL DETAILS",
+                "Sweden",
+                "+46-764340663",
+                "sample.abap@example.test",
+                "Visa status : Permanent Residence",
+                "SKILLS",
+                "\uf0b7 SAP RAP(ABAP Restful application programming)",
+                "\uf0b7 SAP BTP",
+                "\uf0b7 SAP IS-U EDM",
+                "Henrik Sample",
+                "Over all 19 years of professional experience in SAP ABAP.",
+                "EXPERIENCE",
+                "Senior SAP Technical Consultant",
+            ]
+        )
+
+        data = autofill_from_text(text)
+
+        assert data["full_name"] == "Henrik Sample"
+        assert data["main_role"] == "Senior SAP Technical Consultant"
+        assert data["country"] == "Sweden"
+        assert data["skills"] == "SAP RAP(ABAP Restful application programming), SAP BTP, SAP IS-U EDM"
+
+    def test_autofill_prefers_phone_country_over_later_project_locations(self):
+        text = "\n".join(
+            [
+                "Nikos Sample",
+                "Senior ABAP/4 Technical Consultant",
+                "Address Sample Street, Athens, Greece Mobile +30 6946982207",
+                "Email dimitris.sample@example.test",
+                "Senior ABAP/4 Developer for CLIENT_A (Spain, Barcelona)",
+            ]
+        )
+
+        data = autofill_from_text(text)
+
+        assert data["full_name"] == "Nikos Sample"
+        assert data["country"] == "Greece"
+        assert data["main_role"] == "Senior ABAP/4 Technical Consultant"
+
     def test_autofill_rejects_company_project_and_module_names(self):
         text = "\n".join(
             [

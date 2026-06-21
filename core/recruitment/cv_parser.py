@@ -116,7 +116,7 @@ def _extract_doc(path: Path) -> str:
     try:
         word = win32com.client.Dispatch("Word.Application")
         word.Visible = False
-        document = word.Documents.Open(str(path), ReadOnly=True, AddToRecentFiles=False)
+        document = word.Documents.Open(str(path.resolve()), ReadOnly=True, AddToRecentFiles=False)
         return str(document.Content.Text or "").replace("\r", "\n")
     finally:
         if document is not None:

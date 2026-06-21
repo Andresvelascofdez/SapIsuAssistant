@@ -27,9 +27,11 @@ SECTION_HEADINGS = {
     "INTERESTS",
     "KEY ACHIEVEMENTS",
     "LANGUAGES",
+    "PERSONAL DETAILS",
     "PERSONAL INFORMATION",
     "PERFIL",
     "PROFILE",
+    "PROFILE AND BACKGROUND",
     "NATIONALITY",
     "PROFESSIONAL EXPERIENCE",
     "PROFESSIONAL PROFILE",
@@ -39,6 +41,7 @@ SECTION_HEADINGS = {
     "SAP EXPERIENCE - SUMMARY",
     "SIGNIFICANT PROJECTS",
     "SKILLS",
+    "SUMMARY",
     "TECHNICAL KNOWLEDGE",
     "TECHNICAL SKILLS",
     "TECHNICAL SKILL SET",
@@ -101,10 +104,13 @@ COUNTRY_NAMES = {
 PHONE_COUNTRY_PREFIXES = (
     ("351", "Portugal"),
     ("353", "Ireland"),
+    ("30", "Greece"),
     ("34", "Spain"),
     ("33", "France"),
+    ("39", "Italy"),
     ("40", "Romania"),
     ("421", "Slovakia"),
+    ("46", "Sweden"),
     ("371", "Latvia"),
     ("359", "Bulgaria"),
     ("90", "Turkey"),
@@ -121,10 +127,14 @@ NAME_SKIP_RE = re.compile(
     r"development|professional|platform|modeling|spring|summary|license|"
     r"history|experience|expertise|knowledge|formation|education|academic|"
     r"marketing|module|profile|overview|across|industries|work\s+history|"
+    r"performance|improvement|resolution|motivated|collaboration|listening|"
+    r"decision|teambuilding|adaptable|personal\s+details|"
     r"native|fluent|advanced|intermediate|professional\s+working|language|languages|"
-    r"titulacion|formacion|technical\s+knowledge|material|ledger|project|"
+    r"titulacion|formacion|technical\s+knowledge|material|ledger|dictionary|project|"
     r"proyecto|client|company|solution|solutions|pvt|ltd|university|"
     r"universidad|administracion|administration|bases|datos|database|"
+    r"insurance|pharmaceuticals|bank|automotive|aerospace|defence|"
+    r"telecom|olivetti|rome|roma|lazio|"
     r"avante|\bit\b|viewnext|inetum|accenture|capgemini|group|requirement|"
     r"requirements|specification|specifications)",
     re.I,
@@ -175,9 +185,12 @@ def autofill_from_text(text: str, filename_hint: str | None = None) -> dict[str,
     elif filename_name:
         data["full_name"] = filename_name
 
+    strong_labeled_role = _infer_labeled_role(lines, strong_only=True)
+    labeled_role = _infer_labeled_role(lines)
     role = (
-        identity.get("main_role")
-        or _infer_labeled_role(lines)
+        strong_labeled_role
+        or identity.get("main_role")
+        or labeled_role
         or _infer_first_role_line(lines)
         or _infer_role_from_filename(filename_hint or "")
     )
@@ -436,15 +449,26 @@ def _infer_identity(lines: list[str]) -> dict[str, str]:
 
 def _identity_from_labeled_name_line(line: str, lines: list[str], index: int) -> dict[str, str] | None:
     normalized = _strip_accents(line)
-    label_re = r"^(nombre\s+y\s+apellidos|full\s+name|name|nombre)\b"
+    label_re = r"^(surname\s*/\s*name|surname\s+/\s+name|nombre\s+y\s+apellidos|full\s+name|name|nombre)\b"
     if not re.match(label_re, normalized, re.I):
         return None
     parts = [part.strip() for part in re.split(r"\||:", line) if part.strip()]
     for part in parts[1:] or parts:
         part = re.sub(label_re, "", part, flags=re.I).strip(" :|-")
+        part = _normalize_surname_name_value(part)
         if _looks_like_name(part):
             return {"full_name": _clean_name(part), "main_role": _find_role_after_name(lines, index)}
     return None
+
+
+def _normalize_surname_name_value(value: str) -> str:
+    clean = re.sub(r"\s+", " ", value).strip(" ,.;")
+    if "/" not in clean:
+        return clean
+    left, right = [part.strip() for part in clean.split("/", 1)]
+    if left and right and _has_letter(left) and _has_letter(right):
+        return f"{right} {left}"
+    return clean
 
 
 def _identity_from_email_line(line: str, lines: list[str], index: int) -> dict[str, str] | None:
@@ -478,7 +502,7 @@ def _split_identity_line(line: str) -> dict[str, str] | None:
 def _find_role_after_name(lines: list[str], name_index: int) -> str:
     role_parts: list[str] = []
     skipped = 0
-    for candidate in lines[name_index + 1:name_index + 9]:
+    for candidate in lines[name_index + 1:name_index + 14]:
         if _is_section_heading(candidate):
             if role_parts:
                 break
@@ -487,28 +511,38 @@ def _find_role_after_name(lines: list[str], name_index: int) -> str:
         if _is_labeled_line(candidate) or _looks_like_location_line(candidate):
             skipped += 1
             continue
-        if _looks_like_years_line(candidate):
-            skipped += 1
-            continue
-        if _looks_like_role_line(candidate) or (not role_parts and _looks_like_title_line(candidate)):
-            role_parts.append(_clean_role_for_main(candidate) or _clean_role(candidate))
-            continue
         if role_parts and len(candidate) <= 35 and candidate.upper() == candidate and _has_letter(candidate):
             role_parts.append(_clean_role(candidate))
             continue
+        if _looks_like_role_line(candidate) or (not role_parts and _looks_like_title_line(candidate)):
+            if role_parts:
+                break
+            role = _clean_role_for_main(candidate)
+            if role:
+                role_parts.append(role)
+            else:
+                skipped += 1
+            continue
+        if _looks_like_years_line(candidate):
+            skipped += 1
+            continue
         skipped += 1
-        if role_parts or skipped >= 3:
+        if role_parts or skipped >= 8:
             break
     return " ".join(role_parts).strip()
 
 
-def _infer_labeled_role(lines: list[str]) -> str:
+def _infer_labeled_role(lines: list[str], strong_only: bool = False) -> str:
     for line in lines[:100]:
         normalized = line.replace("\u2013", "-").replace("\u2014", "-")
-        match = re.match(r"^(position|role|main role|professional profile|puesto|ocupacion)\s*[:\-]?\s*(.+)$", normalized, re.I)
+        match = re.match(r"^(position|role|main role|professional profile|job\s+or\s+function|puesto|ocupacion)\b", normalized, re.I)
         if not match:
             continue
-        role = _clean_role(match.group(2))
+        if strong_only and match.group(1).lower() == "role":
+            continue
+        remainder = normalized[match.end():].strip(" :|-")
+        parts = [part.strip() for part in re.split(r"\|", remainder) if part.strip()]
+        role = _clean_role(parts[0] if parts else remainder)
         if "." in role:
             role = role.split(".", 1)[0].strip()
         if _looks_like_role_line(role) or _looks_like_title_line(role):
@@ -530,14 +564,21 @@ def _infer_first_role_line(lines: list[str]) -> str:
 
 def _clean_role_for_main(value: str) -> str:
     role = _clean_role(value)
-    if re.match(r"^(i\s+am|i\s+have|this\s+candidate|candidate\s+has)\b", role, re.I):
+    if "@" in role or re.search(r"https?://|linkedin", role, re.I):
+        return ""
+    if re.match(r"^(i\s+am|i\s+have|this\s+candidate|candidate\s+has|over\s+all|overall)\b", role, re.I):
         return ""
     if role[:1].islower():
         return ""
     if "|" in role and re.match(r"^(responsibilities|responsabilities|duties|tasks)\b", role, re.I):
         role = role.split("|", 1)[1].strip()
     role = re.split(r"\b(?:assigned|asignado|destinado|based on|responsible for|description)\b", role, maxsplit=1, flags=re.I)[0]
-    role = re.split(r"\b(?:with\s+over|with\s+\d|over\s+\d{1,2}\s+years?|more\s+than\s+\d{1,2}\s+years?)\b", role, maxsplit=1, flags=re.I)[0]
+    role = re.split(
+        r"\b(?:with\s+over|with\s+\d{1,2}\+?\s+years?|with\s+\d|over\s+\d{1,2}\s+years?|more\s+than\s+\d{1,2}\s+years?)\b",
+        role,
+        maxsplit=1,
+        flags=re.I,
+    )[0]
     role = re.split(
         r"\b(?:january|february|march|april|may|june|july|august|september|october|november|december|"
         r"enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b",
@@ -636,10 +677,10 @@ def _is_labeled_line(line: str) -> bool:
     normalized = _strip_accents(line).lower()
     return bool(
         re.match(
-            r"^(phone|phone number|email|e-mail|location|ubicacion|linkedin|website|"
+            r"^(contact\s+no|contact|phone|phone number|email|e-mail|location|ubicacion|linkedin|website|"
             r"address|telefono|tel|company|client|industry|nationality|birthdate|date\s+of\s+birth|"
             r"dni|fecha\s+de\s+nacimiento|position|role|main\s+role|professional\s+profile|"
-            r"puesto|ocupacion)\b",
+            r"job\s+or\s+function|puesto|ocupacion)\b",
             normalized,
             re.I,
         )
@@ -671,7 +712,10 @@ def _country_from_code(code: str) -> str:
         "BR": "Brazil",
         "IE": "Ireland",
         "FR": "France",
+        "GR": "Greece",
+        "IT": "Italy",
         "RO": "Romania",
+        "SE": "Sweden",
         "IN": "India",
     }.get(code.upper(), "")
 
@@ -686,9 +730,12 @@ def _canonical_country_name(value: str) -> str:
         "brasil": "Brazil",
         "brazil": "Brazil",
         "france": "France",
+        "greece": "Greece",
         "romania": "Romania",
         "ireland": "Ireland",
         "india": "India",
+        "italy": "Italy",
+        "sweden": "Sweden",
     }.get(key, re.sub(r"[^A-Za-zÀ-ÿ ]+", "", value).strip() or value.strip())
 
 
@@ -714,6 +761,12 @@ def _infer_country_from_nearby_text(lines: list[str]) -> str:
         return "Spain"
     if re.search(r"\bLisboa|Portugal\b", window, re.I):
         return "Portugal"
+    if re.search(r"\bAthens|Greece\b", window, re.I):
+        return "Greece"
+    if re.search(r"\bRome|Roma|Italy|Lazio\b", window, re.I):
+        return "Italy"
+    if re.search(r"\bSweden\b", window, re.I):
+        return "Sweden"
     return ""
 
 
@@ -796,6 +849,8 @@ def _extract_skills(lines: list[str]) -> list[str]:
             break
         if collecting and len(skills) >= 5 and _looks_like_experience_sentence(line):
             break
+        if collecting and len(skills) >= 3 and _looks_like_name(line):
+            break
         if not collecting and re.match(r"^TECHNICAL SKILL SET\s*:", line, re.I):
             collecting = True
             inline = re.sub(r"^TECHNICAL SKILL SET\s*:\s*", "", line, flags=re.I)
@@ -865,8 +920,8 @@ def _split_language_line(line: str) -> list[str]:
 
 
 def _clean_skill_line(line: str) -> str:
-    clean = line.strip(" \t-*|\u2022\u25aao")
-    clean = re.sub(r"^[\u25aa\u2022]\s*", "", clean)
+    clean = line.strip(" \t-*|\u2022\u25aa\uf0b7o")
+    clean = re.sub(r"^[\u25aa\u2022\uf0b7]\s*", "", clean)
     clean = re.sub(r"\s+", " ", clean)
     clean = re.sub(r"\s*\(?\d{1,2}(?:[,.]\d+)?\+?\s*(?:years|year|yrs|yr)\)?$", "", clean, flags=re.I)
     clean = clean.strip(" ,.;")

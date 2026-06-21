@@ -126,6 +126,7 @@ The tool is implemented as company-developed internal software with an external 
 - DOCX table extraction for CVs whose personal data is stored inside Word tables.
 - Rule-based CV autofill for name, email, phone, LinkedIn, main role, seniority, years of experience, rates and currency.
 - CV autofill handles split LinkedIn URLs, Spanish contact labels, language sections, country inference from location/phone clues and profile-level experience statements.
+- CV autofill handles European table labels, legacy DOC absolute-path extraction, additional phone-country prefixes and common technical/company false positives.
 - Email, phone or LinkedIn is accepted as the minimum candidate contact evidence; missing contact details must be completed manually.
 - Manual save workflow: importing a CV opens a prefilled candidate form but does not create a candidate until the user saves it.
 - Candidate edit form can replace the stored CV path and extracted text without deleting older CV files.
